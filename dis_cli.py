@@ -8,7 +8,10 @@ import sys
 from pathlib import Path
 
 import click
+from rich.columns import Columns
 from rich.console import Console
+from rich.syntax import Syntax
+from rich.text import Text
 
 
 @click.command()
@@ -41,10 +44,24 @@ def cli(target) -> None:
 
         right.append(instr._disassemble().rstrip())
 
-    longest_left = max(len(l) for l in left)
+    code = "\n".join(left)
+    instructions = "\n".join(right)
 
-    for l, r in zip(left, right):
-        console.print(f"{l:<{longest_left}} | {r}")
+    console.print(
+        Columns(
+            renderables=(
+                Syntax(
+                    code,
+                    "python",
+                    theme="monokai",
+                    line_numbers=True,
+                    code_width=80,
+                    start_line=start_line,
+                ),
+                Text(instructions),
+            )
+        )
+    )
 
 
 if __name__ == "__main__":
