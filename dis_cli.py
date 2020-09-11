@@ -33,11 +33,18 @@ def cli(target) -> None:
 
     console = Console(highlight=True, tab_size=4)
 
-    # TODO: support class methods
-    module_path, object = target.rsplit(".", 1)
+    parts = target.split(".")
+    for split_point in range(len(parts), 1, -1):
+        module_path, object = ".".join(parts[:split_point]), ".".join(parts[split_point:])
 
-    mod = importlib.import_module(module_path)
-    obj = getattr(mod, object)
+        try:
+            obj = importlib.import_module(module_path)
+            break
+        except ModuleNotFoundError:
+            pass
+
+    for o in object.split("."):
+        obj = getattr(obj, o)
 
     bytecode = dis.Bytecode(obj)
     source_lines, start_line = inspect.getsourcelines(obj)
@@ -119,8 +126,9 @@ def cli(target) -> None:
         pad_edge=False,
         expand=False,
         style=Style(bgcolor=code._background_color),
+        width=half_width,
     )
-    for header in INSTRUCTION_GRID_HEADERS:
+    for idx, header in enumerate(INSTRUCTION_GRID_HEADERS):
         grid.add_column(header=header + " ")
     for row in instruction_lines:
         grid.add_row(*row)
