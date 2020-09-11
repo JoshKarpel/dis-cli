@@ -3,18 +3,27 @@
 import dis
 import importlib
 import inspect
-import itertools
+import random
+import re
 import shutil
 import sys
 from pathlib import Path
 
 import click
+from rich.color import ANSI_COLOR_NAMES
 from rich.columns import Columns
 from rich.console import Console
 from rich.style import Style
 from rich.syntax import Syntax
 from rich.table import Table
 from rich.text import Text
+
+COLORS = set(
+    c for c in ANSI_COLOR_NAMES.keys() if not any(("grey" in c, "black" in c, "white" in c))
+)
+RE_JUMP = re.compile(r"to (\d+)")
+
+INSTRUCTION_GRID_HEADERS = ["OFF", "OPERATION", "ARGS", ""]
 
 
 @click.command()
@@ -24,6 +33,7 @@ def cli(target) -> None:
 
     console = Console(highlight=True, tab_size=4)
 
+    # TODO: support class methods
     module_path, object = target.rsplit(".", 1)
 
     mod = importlib.import_module(module_path)
@@ -43,7 +53,10 @@ def cli(target) -> None:
     instruction_lines.extend([" "] * (len(code_lines) - 1))
     last_line = start_line + 1
 
-    instruction_headers = ["OFF", "OPERATION", "ARGS"]
+    jump_targets = [i.offset for i in instructions if i.is_jump_target]
+    jump_colors = {
+        j: color for j, color in zip(jump_targets, random.sample(COLORS, len(jump_targets)))
+    }
 
     for instr in instructions:
         if instr.starts_line is not None and instr.starts_line > last_line:
@@ -57,14 +70,30 @@ def cli(target) -> None:
                 )
             )
             code_lines.extend(new_code_lines)
-            spacer = [(" ",) * len(instruction_headers)] * (len(new_code_lines) - 1)
+            spacer = [(" ",) * len(INSTRUCTION_GRID_HEADERS)] * (len(new_code_lines) - 1)
             instruction_lines.extend(spacer)
             last_line = instr.starts_line
         else:
             nums.append("")
             code_lines.append("")
 
-        instruction_lines.append((instr.offset, instr.opname, f"({instr.argrepr})",))
+        arg = str(instr.arg) if instr.arg is not None else ""
+        if instr.opname == "JUMP_ABSOLUTE":
+            arg = Text(arg, style=Style(color=jump_colors.get(instr.arg)))
+
+        argrepr = f"({instr.argrepr})"
+        match = RE_JUMP.match(instr.argrepr)
+        if match:
+            argrepr = Text(argrepr, style=Style(color=jump_colors.get(int(match.group(1)))))
+
+        instruction_lines.append(
+            (
+                Text(str(instr.offset), style=Style(color=jump_colors.get(instr.offset, None)),),
+                instr.opname + " ",
+                arg,
+                argrepr,
+            )
+        )
 
     nums = "\n".join(nums)
 
@@ -91,50 +120,14 @@ def cli(target) -> None:
         expand=False,
         style=Style(bgcolor=code._background_color),
     )
-    for header in instruction_headers:
+    for header in INSTRUCTION_GRID_HEADERS:
         grid.add_column(header=header + " ")
     for row in instruction_lines:
-        grid.add_row(*map(str, row))
+        grid.add_row(*row)
 
     console.print(
         Columns(renderables=(Text(nums, justify="right"), code, Text(nums, justify="right"), grid,))
     )
-
-
-def fmt_instruction(instruction: dis.Instruction) -> str:
-    fields = []
-
-    # Column: Source code line number
-    # lineno_width = 4
-    # if lineno_width:
-    #     if instruction.starts_line is not None:
-    #         lineno_fmt = "%%%dd" % lineno_width
-    #         fields.append(lineno_fmt % instruction.starts_line)
-    #     else:
-    #         fields.append(" " * lineno_width)
-
-    # Column: Jump target marker
-    if instruction.is_jump_target:
-        fields.append(" 🎯")
-    else:
-        fields.append("   ")
-
-    # Column: Instruction offset from start of code sequence
-    offset_width = 4
-    fields.append(repr(instruction.offset).rjust(offset_width))
-
-    # Column: Opcode name
-    fields.append(instruction.opname.ljust(dis._OPNAME_WIDTH))
-
-    # Column: Opcode argument
-    if instruction.arg is not None:
-        fields.append(repr(instruction.arg).rjust(dis._OPARG_WIDTH))
-
-        # Column: Opcode argument details
-        if instruction.argrepr:
-            fields.append(f"({instruction.argrepr})")
-
-    return " ".join(fields).rstrip()
 
 
 if __name__ == "__main__":
