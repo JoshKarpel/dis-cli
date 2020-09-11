@@ -34,7 +34,7 @@ def cli(target) -> None:
     console = Console(highlight=True, tab_size=4)
 
     parts = target.split(".")
-    for split_point in range(len(parts), 1, -1):
+    for split_point in range(len(parts), 0, -1):
         module_path, object = ".".join(parts[:split_point]), ".".join(parts[split_point:])
 
         try:
@@ -58,7 +58,7 @@ def cli(target) -> None:
     code_lines.extend(source_lines[: instructions[0].starts_line - start_line])
     nums.extend([" "] * (len(code_lines) - 1))
     instruction_lines.extend([" "] * (len(code_lines) - 1))
-    last_line = start_line + 1
+    last_line_idx = instructions[0].starts_line - 1
 
     jump_targets = [i.offset for i in instructions if i.is_jump_target]
     jump_colors = {
@@ -66,26 +66,26 @@ def cli(target) -> None:
     }
 
     for instr in instructions:
-        if instr.starts_line is not None and instr.starts_line > last_line:
+        if instr.starts_line is not None and instr.starts_line > last_line_idx:
             new_code_lines = source_lines[
-                last_line + 1 - start_line : instr.starts_line - start_line + 1
+                last_line_idx + 1 - start_line : instr.starts_line - start_line + 1
             ]
             nums.extend(
                 (
                     str(n) if not len(line.strip()) == 0 else ""
-                    for n, line in enumerate(new_code_lines, start=last_line + 1)
+                    for n, line in enumerate(new_code_lines, start=last_line_idx + 1)
                 )
             )
             code_lines.extend(new_code_lines)
             spacer = [(" ",) * len(INSTRUCTION_GRID_HEADERS)] * (len(new_code_lines) - 1)
             instruction_lines.extend(spacer)
-            last_line = instr.starts_line
+            last_line_idx = instr.starts_line
         else:
             nums.append("")
             code_lines.append("")
 
         arg = str(instr.arg) if instr.arg is not None else ""
-        if instr.opname == "JUMP_ABSOLUTE":
+        if "JUMP" in instr.opname:
             arg = Text(arg, style=Style(color=jump_colors.get(instr.arg)))
 
         argrepr = f"({instr.argrepr})"
@@ -101,6 +101,8 @@ def cli(target) -> None:
                 argrepr,
             )
         )
+
+    code_lines.extend(source_lines[last_line_idx + 1 - start_line :])
 
     nums = "\n".join(nums)
 
