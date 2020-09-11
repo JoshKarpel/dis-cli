@@ -7,7 +7,9 @@ import random
 import re
 import shutil
 import sys
+import textwrap
 from pathlib import Path
+from typing import Optional
 
 import click
 from rich.color import ANSI_COLOR_NAMES
@@ -28,13 +30,14 @@ INSTRUCTION_GRID_HEADERS = ["OFF", "OPERATION", "ARGS", ""]
 
 @click.command()
 @click.argument("target")
-def cli(target) -> None:
+@click.option("--style", default="monokai")
+def cli(target: str, style: Optional[str]) -> None:
     sys.path.append(str(Path.cwd()))
 
     console = Console(highlight=True, tab_size=4)
 
     parts = target.split(".")
-    for split_point in range(len(parts), 0, -1):
+    for split_point in range(len(parts) - 1, 0, -1):
         module_path, object = ".".join(parts[:split_point]), ".".join(parts[split_point:])
 
         try:
@@ -45,6 +48,12 @@ def cli(target) -> None:
 
     for o in object.split("."):
         obj = getattr(obj, o)
+
+    if inspect.ismodule(obj):
+        raise click.ClickException("Cannot disassemble modules. Target a specific function.")
+
+    if inspect.isclass(obj):
+        obj = obj.__init__
 
     bytecode = dis.Bytecode(obj)
     source_lines, start_line = inspect.getsourcelines(obj)
@@ -88,10 +97,12 @@ def cli(target) -> None:
         if "JUMP" in instr.opname:
             arg = Text(arg, style=Style(color=jump_colors.get(instr.arg)))
 
-        argrepr = f"({instr.argrepr})"
         match = RE_JUMP.match(instr.argrepr)
-        if match:
-            argrepr = Text(argrepr, style=Style(color=jump_colors.get(int(match.group(1)))))
+        argrepr = Text(
+            f"{instr.argrepr}",
+            style=Style(color=jump_colors.get(int(match.group(1)))) if match else None,
+            no_wrap=True,
+        )
 
         instruction_lines.append(
             (
@@ -106,16 +117,21 @@ def cli(target) -> None:
 
     nums = "\n".join(nums)
 
-    full_width = shutil.get_terminal_size().columns - 10
+    full_width = shutil.get_terminal_size().columns - 6
     half_width = (full_width - (max(map(len, nums)) * 2)) // 2
 
-    code_lines = [line[:half_width] for line in code_lines]
+    code_lines = textwrap.dedent("\n".join(code_lines)).splitlines()
+    code_lines = [
+        line[: half_width - 1] + "…" if len(line) > half_width else line for line in code_lines
+    ]
+
     code = Syntax(
         "\n".join(code_lines),
-        "python",
+        lexer_name="python",
+        theme=style,
         line_numbers=False,
-        code_width=max(map(len, code_lines)) + 2,
         start_line=start_line,
+        code_width=half_width,
     )
 
     grid = Table(
@@ -129,14 +145,15 @@ def cli(target) -> None:
         expand=False,
         style=Style(bgcolor=code._background_color),
         width=half_width,
+        header_style=Style(color="bright_white", bold=True),
     )
     for idx, header in enumerate(INSTRUCTION_GRID_HEADERS):
         grid.add_column(header=header + " ")
     for row in instruction_lines:
-        grid.add_row(*row)
+        grid.add_row(*row, style=Style(color="bright_white"))
 
     console.print(
-        Columns(renderables=(Text(nums, justify="right"), code, Text(nums, justify="right"), grid,))
+        Columns(renderables=(Text(nums, justify="right"), code, Text(nums, justify="right"), grid),)
     )
 
 
