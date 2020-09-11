@@ -13,6 +13,7 @@ from rich.columns import Columns
 from rich.console import Console
 from rich.style import Style
 from rich.syntax import Syntax
+from rich.table import Table
 from rich.text import Text
 
 
@@ -32,7 +33,7 @@ def cli(target) -> None:
     source_lines, start_line = inspect.getsourcelines(obj)
 
     code_lines = []
-    instruction_lines = [" ".join(["JMP", " OFF", "OPCODE", "ARG".rjust(dis._OPNAME_WIDTH - 1)])]
+    instruction_lines = []
     nums = [str(start_line)]
     source_lines = [l.rstrip() for l in source_lines]
 
@@ -41,21 +42,29 @@ def cli(target) -> None:
     nums.extend([" "] * (len(code_lines) - 1))
     instruction_lines.extend([" "] * (len(code_lines) - 1))
     last_line = start_line + 1
+
+    instruction_headers = ["OFF", "OPERATION", "ARGS"]
+
     for instr in instructions:
-        if instr.starts_line is not None:
-            nums.extend(map(str, range(last_line + 1, instr.starts_line + 1)))
-            leftover_code_lines = source_lines[
+        if instr.starts_line is not None and instr.starts_line > last_line:
+            new_code_lines = source_lines[
                 last_line + 1 - start_line : instr.starts_line - start_line + 1
             ]
-            code_lines.extend(leftover_code_lines)
-            spacer = [" "] * (len(leftover_code_lines) - 1)
+            nums.extend(
+                (
+                    str(n) if not len(line.strip()) == 0 else ""
+                    for n, line in enumerate(new_code_lines, start=last_line + 1)
+                )
+            )
+            code_lines.extend(new_code_lines)
+            spacer = [(" ",) * len(instruction_headers)] * (len(new_code_lines) - 1)
             instruction_lines.extend(spacer)
             last_line = instr.starts_line
         else:
             nums.append("")
             code_lines.append("")
 
-        instruction_lines.append(fmt_instruction(instr))
+        instruction_lines.append((instr.offset, instr.opname, f"({instr.argrepr})",))
 
     nums = "\n".join(nums)
 
@@ -63,25 +72,32 @@ def cli(target) -> None:
     half_width = (full_width - (max(map(len, nums)) * 2)) // 2
 
     code_lines = [line[:half_width] for line in code_lines]
-    instruction_lines = [line[:half_width] for line in instruction_lines]
-    code = "\n".join(code_lines)
-    instructions = "\n".join(instruction_lines)
+    code = Syntax(
+        "\n".join(code_lines),
+        "python",
+        line_numbers=False,
+        code_width=max(map(len, code_lines)) + 2,
+        start_line=start_line,
+    )
+
+    grid = Table(
+        box=None,
+        padding=0,
+        collapse_padding=True,
+        show_header=True,
+        show_footer=False,
+        show_edge=False,
+        pad_edge=False,
+        expand=False,
+        style=Style(bgcolor=code._background_color),
+    )
+    for header in instruction_headers:
+        grid.add_column(header=header + " ")
+    for row in instruction_lines:
+        grid.add_row(*map(str, row))
 
     console.print(
-        Columns(
-            renderables=(
-                Text(nums, justify="right"),
-                Syntax(
-                    code,
-                    "python",
-                    line_numbers=False,
-                    code_width=max(map(len, code_lines)) + 2,
-                    start_line=start_line,
-                ),
-                Text(nums, justify="right"),
-                Syntax(instructions, "text", code_width=max(map(len, instruction_lines)) + 2),
-            )
-        )
+        Columns(renderables=(Text(nums, justify="right"), code, Text(nums, justify="right"), grid,))
     )
 
 
