@@ -159,14 +159,7 @@ def make_instruction_row(
 
 
 def make_blank_instruction_rows(n: int) -> List[T_INSTRUCTION_ROW]:
-    return [
-        (
-            Text(),
-            Text(),
-            Text(),
-            Text(),
-        )
-    ] * n
+    return [(Text(), Text(), Text(), Text())] * n
 
 
 def find_jump_colors(instructions: List[dis.Instruction]) -> T_JUMP_COLORS:
@@ -214,9 +207,7 @@ def make_nums_block(nums: str) -> Text:
 
 
 def make_source_block(
-    code_lines: List[str],
-    block_width: int,
-    theme: Optional[str] = None,
+    code_lines: List[str], block_width: int, theme: Optional[str] = None,
 ) -> Syntax:
     code_lines = textwrap.dedent("\n".join(code_lines)).splitlines()
     code_lines = [
