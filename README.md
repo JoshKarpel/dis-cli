@@ -6,6 +6,15 @@
 
 ![dis.dis](https://github.com/JoshKarpel/dis-cli/raw/master/examples/dis.dis.png)
 
+## Installation
+
+`dis-cli` can be installed from [PyPI](https://pypi.org/project/dis-cli/).
+To install via `pip`, run
+
+```console
+pip install dis-cli
+```
+
 ## Usage
 
 `dis-cli` provides a command line program, `dis`,
