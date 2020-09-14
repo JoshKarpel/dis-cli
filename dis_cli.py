@@ -31,7 +31,9 @@ T_INSTRUCTION_ROW = Tuple[Text, ...]
 
 @click.command()
 @click.argument("target", nargs=-1)
-@click.option("--theme", default="monokai")
+@click.option(
+    "--theme", default="monokai", help="Choose the syntax highlighting theme (any Pygments theme)."
+)
 def cli(target: Tuple[str], theme: str) -> None:
     console = Console(highlight=True, tab_size=4)
 
