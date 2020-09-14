@@ -11,8 +11,8 @@
 `dis-cli` can be installed from [PyPI](https://pypi.org/project/dis-cli/).
 To install via `pip`, run
 
-```console
-pip install dis-cli
+```bash session
+$ pip install dis-cli
 ```
 
 ## Usage
@@ -21,7 +21,7 @@ pip install dis-cli
 which takes a "import-like" path to a function to display information about.
 For example, if you have a package `a`, with a submodule `b`, containing a function `c`,
 you could run `dis` on it like this:
-```console
+```bash session
 $ dis a.b.c
 ```
 Just like you could import `c` in a script:
