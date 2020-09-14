@@ -8,8 +8,7 @@ import re
 import shutil
 import sys
 import textwrap
-from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 import click
 from rich.color import ANSI_COLOR_NAMES
@@ -21,32 +20,34 @@ from rich.table import Table
 from rich.text import Text
 
 T_JUMP_COLORS = Dict[int, str]
-T_INSTRUCTION_ROW = Tuple[Text, Text, Text, Text]
-
-
 JUMP_COLORS = set(
     c for c in ANSI_COLOR_NAMES.keys() if not any(("grey" in c, "black" in c, "white" in c))
 )
 RE_JUMP = re.compile(r"to (\d+)")
 
 INSTRUCTION_GRID_HEADERS = ["OFF", "OPERATION", "ARGS", ""]
+T_INSTRUCTION_ROW = Tuple[Text, ...]
 
 
 @click.command()
 @click.argument("target", nargs=-1)
 @click.option("--theme", default="monokai")
 def cli(target: Tuple[str], theme: str) -> None:
-    sys.path.append(str(Path.cwd()))
-
     console = Console(highlight=True, tab_size=4)
 
-    functions = list(map(find_function, target))
-    for idx, func in enumerate(functions):
+    for idx, disp in enumerate(
+        make_source_and_bytecode_display_for_targets(targets=target, theme=theme)
+    ):
         if idx > 0:
             console.print()
-
-        disp = make_source_and_bytecode_display(func, theme)
         console.print(disp)
+
+
+def make_source_and_bytecode_display_for_targets(
+    targets: Iterable[str], theme: str
+) -> Iterable[Columns]:
+    for func in map(find_function, targets):
+        yield make_source_and_bytecode_display(func, theme)
 
 
 def find_function(target: str) -> Any:
@@ -159,7 +160,7 @@ def make_instruction_row(
 
 
 def make_blank_instruction_rows(n: int) -> List[T_INSTRUCTION_ROW]:
-    return [(Text(), Text(), Text(), Text())] * n
+    return [(Text(),) * len(INSTRUCTION_GRID_HEADERS)] * n
 
 
 def find_jump_colors(instructions: List[dis.Instruction]) -> T_JUMP_COLORS:
@@ -207,7 +208,9 @@ def make_nums_block(nums: str) -> Text:
 
 
 def make_source_block(
-    code_lines: List[str], block_width: int, theme: Optional[str] = None,
+    code_lines: List[str],
+    block_width: int,
+    theme: Optional[str] = None,
 ) -> Syntax:
     code_lines = textwrap.dedent("\n".join(code_lines)).splitlines()
     code_lines = [
