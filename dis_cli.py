@@ -101,7 +101,9 @@ def make_source_and_bytecode_display(function: Any, theme: str) -> Columns:
 
     source_block = make_source_block(code_lines, block_width=half_width, theme=theme)
     bytecode_block = make_bytecode_block(
-        instruction_rows, block_width=half_width, bgcolor=source_block._background_color
+        instruction_rows,
+        block_width=half_width,
+        bgcolor=Syntax.get_theme(theme).get_background_style().bgcolor,
     )
     line_numbers_block = make_nums_block(line_numbers)
 
