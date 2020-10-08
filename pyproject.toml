@@ -8,7 +8,7 @@ target-version = ["py36", "py37", "py38"]
 include = "\\.pyi?$"
 
 [tool.isort]
-known_third_party = ["click", "rich", "setuptools"]
+known_third_party = ["click", "pytest", "rich", "setuptools"]
 line_length = 100
 multi_line_output = "VERTICAL_HANGING_INDENT"
 include_trailing_comma = true
