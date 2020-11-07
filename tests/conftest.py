@@ -26,7 +26,7 @@ def filename() -> str:
     """
     name = "".join(random.choices(string.ascii_letters, k=FILENAME_LENGTH))
 
-    while name in USED_FILENAMES:
+    while name in USED_FILENAMES:  # pragma: unlikely
         name = "".join(random.choices(string.ascii_letters, k=FILENAME_LENGTH))
 
     USED_FILENAMES.add(name)
