@@ -2,6 +2,11 @@ from pathlib import Path
 
 import pytest
 
+
+def test_smoke(cli):
+    assert cli(["dis.dis"]).exit_code == 0
+
+
 FUNC_NAME = "func"
 FUNC = f"""
 def {FUNC_NAME}():
