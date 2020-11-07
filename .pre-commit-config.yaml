@@ -13,7 +13,6 @@ repos:
       - id: check-builtin-literals
       - id: check-docstring-first
       - id: debug-statements
-      - id: check-executables-have-shebangs
       - id: check-merge-conflict
       - id: mixed-line-ending
       - id: check-case-conflict

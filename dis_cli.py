@@ -220,14 +220,13 @@ def make_source_block(
     code_lines = [
         line[: block_width - 1] + "…" if len(line) > block_width else line for line in code_lines
     ]
-    code = Syntax(
+    return Syntax(
         "\n".join(code_lines),
         lexer_name="python",
         theme=theme,
         line_numbers=False,
         code_width=block_width,
     )
-    return code
 
 
 def make_bytecode_block(
