@@ -1,13 +1,16 @@
 #!/usr/bin/env python3
 
+import contextlib
 import dis
 import importlib
 import inspect
+import os
 import random
 import re
 import shutil
 import sys
 import textwrap
+from types import ModuleType
 from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 import click
@@ -35,6 +38,9 @@ T_INSTRUCTION_ROW = Tuple[Text, ...]
     "--theme", default="monokai", help="Choose the syntax highlighting theme (any Pygments theme)."
 )
 def cli(target: Tuple[str], theme: str) -> None:
+    # make sure the cwd (starting point for the import path) is actually on PYTHONPATH
+    sys.path.append(os.getcwd())
+
     console = Console(highlight=True, tab_size=4)
 
     for idx, disp in enumerate(
@@ -61,7 +67,7 @@ def find_function(target: str) -> Any:
         module_path, object = ".".join(parts[:split_point]), ".".join(parts[split_point:])
 
         try:
-            obj = importlib.import_module(module_path)
+            obj = silent_import(module_path)
             break
         except ModuleNotFoundError:
             pass
@@ -82,6 +88,11 @@ def find_function(target: str) -> Any:
         obj = obj.__init__  # type: ignore
 
     return obj
+
+
+def silent_import(module_path: str) -> ModuleType:
+    with open(os.devnull, "w") as f, contextlib.redirect_stdout(f), contextlib.redirect_stderr(f):
+        return importlib.import_module(module_path)
 
 
 def make_source_and_bytecode_display(function: Any, theme: str) -> Columns:
@@ -220,14 +231,13 @@ def make_source_block(
     code_lines = [
         line[: block_width - 1] + "…" if len(line) > block_width else line for line in code_lines
     ]
-    code = Syntax(
+    return Syntax(
         "\n".join(code_lines),
         lexer_name="python",
         theme=theme,
         line_numbers=False,
         code_width=block_width,
     )
-    return code
 
 
 def make_bytecode_block(

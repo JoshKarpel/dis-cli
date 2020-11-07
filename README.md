@@ -1,6 +1,7 @@
 # dis-cli
 
 ![PyPI](https://img.shields.io/pypi/v/dis-cli)
+[![pre-commit.ci status](https://results.pre-commit.ci/badge/github/JoshKarpel/dis-cli/master.svg)](https://results.pre-commit.ci/latest/github/JoshKarpel/dis-cli/master)
 
 `dis-cli` is a command line tool for displaying Python source and bytecode.
 
