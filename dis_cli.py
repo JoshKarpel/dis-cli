@@ -18,6 +18,7 @@ import click
 from rich.color import ANSI_COLOR_NAMES
 from rich.columns import Columns
 from rich.console import Console
+from rich.rule import Rule
 from rich.style import Style
 from rich.syntax import Syntax
 from rich.table import Table
@@ -58,14 +59,12 @@ def cli(
     for idx, disp in enumerate(
         make_source_and_bytecode_display_for_targets(targets=target, theme=theme)
     ):
-        if idx > 0:
-            console.print()
-        console.print(disp)
+        console.print(*disp)
 
 
 def make_source_and_bytecode_display_for_targets(
     targets: Iterable[str], theme: str
-) -> Iterable[Columns]:
+) -> Iterable[Tuple[Rule, Columns]]:
     for func in map(find_function, targets):
         yield make_source_and_bytecode_display(func, theme)
 
@@ -116,7 +115,7 @@ def silent_import(module_path: str) -> ModuleType:
             )
 
 
-def make_source_and_bytecode_display(function: Any, theme: str) -> Columns:
+def make_source_and_bytecode_display(function: Any, theme: str) -> Tuple[Rule, Columns]:
     bytecode = dis.Bytecode(function)
     source_lines, start_line = inspect.getsourcelines(function)
 
@@ -139,7 +138,7 @@ def make_source_and_bytecode_display(function: Any, theme: str) -> Columns:
     )
     line_numbers_block = make_nums_block(line_numbers)
 
-    return Columns(
+    return Rule(title=f"{function.__module__}.{function.__qualname__}"), Columns(
         renderables=(line_numbers_block, source_block, line_numbers_block, bytecode_block)
     )
 
