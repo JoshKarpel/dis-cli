@@ -37,8 +37,19 @@ T_INSTRUCTION_ROW = Tuple[Text, ...]
 @click.option(
     "--theme", default="monokai", help="Choose the syntax highlighting theme (any Pygments theme)."
 )
-def cli(target: Tuple[str], theme: str) -> None:
-    # make sure the cwd (starting point for the import path) is actually on PYTHONPATH
+@click.version_option()
+def cli(
+    target: Tuple[str],
+    theme: str,
+) -> None:
+    """
+    Display the source and bytecode of the TARGET Python functions.
+
+    Any number of TARGETs may be passed; they will be displayed sequentially.
+    """
+    # Make sure the cwd (implicit starting point for the import path) is actually on PYTHONPATH.
+    # Since Python automatically adds the cwd on startup, this is only really necessary in the test suite,
+    # but it's convenient to do it here for sanity.
     sys.path.append(os.getcwd())
 
     console = Console(highlight=True, tab_size=4)
@@ -264,6 +275,15 @@ def make_bytecode_block(
         grid.add_row(*row, style=Style(color="bright_white"))
 
     return grid
+
+
+def get_own_version() -> str:
+    if sys.version_info < (3, 8):
+        import importlib_metadata
+    else:
+        import importlib.metadata as importlib_metadata
+
+    return importlib_metadata.version("dis_cli")
 
 
 if __name__ == "__main__":

@@ -2,6 +2,8 @@ from pathlib import Path
 
 import pytest
 
+from dis_cli import get_own_version
+
 
 def test_smoke(cli):
     assert cli(["dis.dis"]).exit_code == 0
@@ -46,3 +48,9 @@ def test_module_level_output_is_not_shown(cli, test_dir, filename, extra_source)
 
     assert result.exit_code == 0
     assert "hi" not in result.output
+
+
+def test_version(cli):
+    result = cli(["--version"])
+
+    assert get_own_version() in result.output
