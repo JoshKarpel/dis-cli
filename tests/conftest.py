@@ -11,9 +11,6 @@ from click.testing import CliRunner, Result
 
 import dis_cli
 
-USED_FILENAMES = set()
-FILENAME_LENGTH = 30
-
 
 @pytest.fixture
 def filename() -> str:
@@ -24,17 +21,10 @@ def filename() -> str:
     Without this, if we run the CLI on two modules with different contents but the same filename during a test session,
     the second run will see the contents of the first module.
     """
-    name = "".join(random.choices(string.ascii_letters, k=FILENAME_LENGTH))
-
-    while name in USED_FILENAMES:
-        name = "".join(random.choices(string.ascii_letters, k=FILENAME_LENGTH))
-
-    USED_FILENAMES.add(name)
-
-    return name
+    return "_".join(random.choices(string.ascii_uppercase, k=30))
 
 
-@pytest.fixture
+@pytest.fixture(scope="session")
 def runner() -> CliRunner:
     return CliRunner()
 
@@ -56,7 +46,7 @@ def invoke_with_debug(runner: CliRunner, cli, *args, **kwargs) -> Result:
     return result
 
 
-@pytest.fixture
+@pytest.fixture(scope="session")
 def cli(runner):
     return functools.partial(invoke_with_debug, runner, dis_cli.cli)
 
