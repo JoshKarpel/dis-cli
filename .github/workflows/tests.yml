@@ -25,4 +25,8 @@ jobs:
     - name: Install package
       run: pip install .[tests]
     - name: Run tests
-      run: pytest tests/
+      run: pytest --cov --cov-report=xml tests/
+    - uses: codecov/codecov-action@v1
+      with:
+        fail_ci_if_error: true
+        verbose: true
