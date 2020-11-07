@@ -16,6 +16,10 @@ jobs:
 
     runs-on: ${{ matrix.platform }}
 
+    env:
+      PLATFORM: ${{ matrix.platform }}
+      PYTHON_VERSION: ${{ matrix.python-version }}
+
     steps:
     - uses: actions/checkout@v2
     - name: Set up Python ${{ matrix.python-version }}
@@ -28,5 +32,6 @@ jobs:
       run: pytest --cov --cov-report=xml tests/
     - uses: codecov/codecov-action@v1
       with:
+        env_vars: PLATFORM,PYTHON_VERSION
         fail_ci_if_error: true
         verbose: true
