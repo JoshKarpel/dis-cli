@@ -10,6 +10,7 @@ import re
 import shutil
 import sys
 import textwrap
+import traceback
 from types import ModuleType
 from typing import Any, Dict, Iterable, List, Optional, Tuple
 
@@ -77,7 +78,7 @@ def find_function(target: str) -> Any:
             obj = getattr(obj, o)
         except AttributeError as e:
             raise click.ClickException(
-                f"No function named {o!r} found in {type(obj).__name__} {obj!r}."
+                f"No attribute named {o!r} found on {type(obj).__name__} {obj!r}."
             )
 
     if inspect.ismodule(obj):
@@ -92,7 +93,16 @@ def find_function(target: str) -> Any:
 
 def silent_import(module_path: str) -> ModuleType:
     with open(os.devnull, "w") as f, contextlib.redirect_stdout(f), contextlib.redirect_stderr(f):
-        return importlib.import_module(module_path)
+        try:
+            return importlib.import_module(module_path)
+        except ImportError:
+            # Let ImportError propagate, since it represents normal behavior of a bad import path,
+            # not something going wrong in the imported module itself.
+            raise
+        except Exception:
+            raise click.ClickException(
+                f"Encountered an exception during import of module {module_path}:\n{traceback.format_exc()}"
+            )
 
 
 def make_source_and_bytecode_display(function: Any, theme: str) -> Columns:
