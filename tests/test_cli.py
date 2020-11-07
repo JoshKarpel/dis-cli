@@ -36,6 +36,14 @@ def test_func_source_in_output(cli, source_path_with_func):
     assert all([line in result.output for line in FUNC.splitlines()])
 
 
+def test_handle_missing_target_gracefully(cli, source_path_with_func):
+    result = cli([f"{source_path_with_func.stem}.{FUNC_NAME}osidjafoa"])
+
+    assert result.exit_code == 1
+    assert "osidjafoa" in result.output
+    assert "No attribute named" in result.output
+
+
 @pytest.mark.parametrize(
     "extra_source", ["print('hi')", "import sys\nprint('hi', file=sys.stderr)"]
 )
@@ -48,6 +56,18 @@ def test_module_level_output_is_not_shown(cli, test_dir, filename, extra_source)
 
     assert result.exit_code == 0
     assert "hi" not in result.output
+
+
+@pytest.mark.parametrize("extra_source", ["raise Exception", "syntax error"])
+def test_module_level_error_is_handled_gracefully(cli, test_dir, filename, extra_source):
+    source_path = test_dir / f"{filename}.py"
+    source_path.write_text(f"{extra_source}\n{FUNC}")
+    print(source_path.read_text())
+
+    result = cli([f"{source_path.stem}.{FUNC_NAME}"])
+
+    assert result.exit_code == 1
+    assert "during import" in result.output
 
 
 def test_version(cli):
