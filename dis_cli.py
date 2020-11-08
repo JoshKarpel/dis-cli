@@ -11,6 +11,7 @@ import shutil
 import sys
 import textwrap
 import traceback
+from pathlib import Path
 from types import ModuleType
 from typing import Any, Dict, Iterable, List, Optional, Tuple
 
@@ -25,9 +26,9 @@ from rich.table import Table
 from rich.text import Text
 
 T_JUMP_COLORS = Dict[int, str]
-JUMP_COLORS = set(
+JUMP_COLORS = [
     c for c in ANSI_COLOR_NAMES.keys() if not any(("grey" in c, "black" in c, "white" in c))
-)
+]
 RE_JUMP = re.compile(r"to (\d+)")
 
 INSTRUCTION_GRID_HEADERS = ["OFF", "OPERATION", "ARGS", ""]
@@ -134,12 +135,24 @@ def make_source_and_bytecode_display(function: Any, theme: str) -> Tuple[Rule, C
     bytecode_block = make_bytecode_block(
         instruction_rows,
         block_width=half_width,
-        bgcolor=Syntax.get_theme(theme).get_background_style().bgcolor,
+        bgcolor=Syntax.get_theme(theme).get_background_style().bgcolor.name,
     )
     line_numbers_block = make_nums_block(line_numbers)
 
-    return Rule(title=f"{function.__module__}.{function.__qualname__}"), Columns(
+    return Rule(title=make_title(function, start_line), style=random.choice(JUMP_COLORS)), Columns(
         renderables=(line_numbers_block, source_block, line_numbers_block, bytecode_block)
+    )
+
+
+def make_title(function, start_line: int) -> Text:
+    path = Path(inspect.getmodule(function).__file__)
+    try:
+        path = path.relative_to(Path.cwd())
+    except ValueError:  # path is not under the cwd
+        pass
+
+    return Text.from_markup(
+        f"{type(function).__name__} [bold]{function.__module__}.{function.__qualname__}[/bold] from {path}:{start_line}"
     )
 
 
