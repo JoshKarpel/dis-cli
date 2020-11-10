@@ -327,7 +327,7 @@ def make_bytecode_block(
     return grid
 
 
-def get_own_version() -> str:
+def get_own_version() -> str:  # pragma: versioned
     if sys.version_info < (3, 8):
         import importlib_metadata
     else:

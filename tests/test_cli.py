@@ -1,3 +1,4 @@
+import textwrap
 from pathlib import Path
 
 import pytest
@@ -68,6 +69,32 @@ def test_module_level_error_is_handled_gracefully(cli, test_dir, filename, extra
 
     assert result.exit_code == 1
     assert "during import" in result.output
+
+
+def test_targetting_a_class_redirects_to_init(cli, test_dir, filename):
+    source_path = test_dir / f"{filename}.py"
+    source_path.write_text(
+        textwrap.dedent(
+            """\
+    class Foo:
+        def __init__(self):
+            print("foobar")
+    """
+        )
+    )
+    print(source_path.read_text())
+
+    result = cli([f"{source_path.stem}.Foo"])
+
+    assert result.exit_code == 0
+    assert "foobar" in result.output
+
+
+def test_cannot_dissassemble_module(cli):
+    result = cli(["click.testing"])
+
+    assert result.exit_code == 1
+    assert "Cannot disassemble modules" in result.output
 
 
 def test_version(cli):

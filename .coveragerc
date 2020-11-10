@@ -11,6 +11,7 @@ source =
 exclude_lines =
     pragma: no cover
     pragma: unlikely
+    pragma: versioned
 
     def __repr__
     if self\.debug
