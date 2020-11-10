@@ -4,6 +4,7 @@ import contextlib
 import dis
 import importlib
 import inspect
+import itertools
 import os
 import random
 import re
@@ -11,8 +12,9 @@ import shutil
 import sys
 import textwrap
 import traceback
-from types import ModuleType
-from typing import Any, Dict, Iterable, List, Optional, Tuple
+from dataclasses import dataclass
+from types import FunctionType, ModuleType
+from typing import Dict, Iterable, List, Optional, Tuple
 
 import click
 from rich.color import ANSI_COLOR_NAMES
@@ -24,7 +26,7 @@ from rich.syntax import Syntax
 from rich.table import Table
 from rich.text import Text
 
-T_JUMP_COLORS = Dict[int, str]
+T_JUMP_COLOR_MAP = Dict[int, str]
 JUMP_COLORS = set(
     c for c in ANSI_COLOR_NAMES.keys() if not any(("grey" in c, "black" in c, "white" in c))
 )
@@ -39,10 +41,17 @@ T_INSTRUCTION_ROW = Tuple[Text, ...]
 @click.option(
     "--theme", default="monokai", help="Choose the syntax highlighting theme (any Pygments theme)."
 )
+@click.option(
+    "-p/-P",
+    "--paging/--no-paging",
+    default=None,
+    help="Enable/disable displaying output using the system pager. If not passed explicitly, the pager will automatically be used if the output is taller than your terminal.",
+)
 @click.version_option()
 def cli(
     target: Tuple[str],
     theme: str,
+    paging: Optional[bool],
 ) -> None:
     """
     Display the source and bytecode of the TARGET Python functions.
@@ -56,26 +65,40 @@ def cli(
 
     console = Console(highlight=True, tab_size=4)
 
-    for idx, disp in enumerate(
-        make_source_and_bytecode_display_for_targets(targets=target, theme=theme)
-    ):
-        console.print(*disp)
+    displays = list(make_source_and_bytecode_displays_for_targets(targets=target, theme=theme))
+    parts = itertools.chain.from_iterable(display.parts for display in displays)
+    total_height = sum(display.height for display in displays)
+
+    if paging is None:
+        paging = total_height > (shutil.get_terminal_size((80, 20)).lines - 5)
+
+    if paging:
+        with console.pager(styles=True):
+            console.print(*parts)
+    else:
+        console.print(*parts)
 
 
-def make_source_and_bytecode_display_for_targets(
+@dataclass(frozen=True)
+class Display:
+    parts: List[Union[Rule, Columns]]
+    height: int
+
+
+def make_source_and_bytecode_displays_for_targets(
     targets: Iterable[str], theme: str
-) -> Iterable[Tuple[Rule, Columns]]:
+) -> Iterable[Display]:
     for func in map(find_function, targets):
         yield make_source_and_bytecode_display(func, theme)
 
 
-def find_function(target: str) -> Any:
+def find_function(target: str) -> FunctionType:
     parts = target.split(".")
 
     # Walk backwards along the split parts and try to do the import.
     # This makes the import go as deep as possible.
     for split_point in range(len(parts) - 1, 0, -1):
-        module_path, object = ".".join(parts[:split_point]), ".".join(parts[split_point:])
+        module_path, target_path = ".".join(parts[:split_point]), ".".join(parts[split_point:])
 
         try:
             obj = silent_import(module_path)
@@ -83,10 +106,10 @@ def find_function(target: str) -> Any:
         except ModuleNotFoundError:
             pass
 
-    for o in object.split("."):
+    for o in target_path.split("."):
         try:
             obj = getattr(obj, o)
-        except AttributeError as e:
+        except AttributeError:
             raise click.ClickException(
                 f"No attribute named {o!r} found on {type(obj).__name__} {obj!r}."
             )
@@ -115,15 +138,14 @@ def silent_import(module_path: str) -> ModuleType:
             )
 
 
-def make_source_and_bytecode_display(function: Any, theme: str) -> Tuple[Rule, Columns]:
-    bytecode = dis.Bytecode(function)
+def make_source_and_bytecode_display(function: FunctionType, theme: str) -> Display:
+    instructions = list(dis.Bytecode(function))
     source_lines, start_line = inspect.getsourcelines(function)
 
-    instructions = list(bytecode)
-    jump_colors = find_jump_colors(instructions)
+    jump_color_map = find_jump_colors(instructions)
 
     code_lines, instruction_rows, line_number_lines = align_source_and_instructions(
-        instructions, jump_colors, source_lines, start_line
+        instructions, jump_color_map, source_lines, start_line
     )
 
     line_numbers = "\n".join(line_number_lines)
@@ -138,14 +160,20 @@ def make_source_and_bytecode_display(function: Any, theme: str) -> Tuple[Rule, C
     )
     line_numbers_block = make_nums_block(line_numbers)
 
-    return Rule(title=f"{function.__module__}.{function.__qualname__}"), Columns(
-        renderables=(line_numbers_block, source_block, line_numbers_block, bytecode_block)
+    return Display(
+        parts=[
+            Rule(title=f"{function.__module__}.{function.__qualname__}"),
+            Columns(
+                renderables=(line_numbers_block, source_block, line_numbers_block, bytecode_block)
+            ),
+        ],
+        height=len(code_lines) + 1,  # the 1 is from the Rule
     )
 
 
 def align_source_and_instructions(
     instructions: List[dis.Instruction],
-    jump_colors: T_JUMP_COLORS,
+    jump_color_map: T_JUMP_COLOR_MAP,
     raw_source_lines: List[str],
     start_line: int,
 ) -> Tuple[List[str], List[T_INSTRUCTION_ROW], List[str]]:
@@ -175,7 +203,7 @@ def align_source_and_instructions(
             nums.append("")
             source_lines.append("")
 
-        instruction_rows.append(make_instruction_row(instr, jump_colors))
+        instruction_rows.append(make_instruction_row(instr, jump_color_map))
 
     # catch leftover source
     source_lines.extend(raw_source_lines[last_line_idx + 1 - start_line :])
@@ -184,13 +212,13 @@ def align_source_and_instructions(
 
 
 def make_instruction_row(
-    instruction: dis.Instruction, jump_colors: T_JUMP_COLORS
+    instruction: dis.Instruction, jump_color_map: T_JUMP_COLOR_MAP
 ) -> T_INSTRUCTION_ROW:
     return (
-        make_offset(instruction, jump_colors),
+        make_offset(instruction, jump_color_map),
         make_opname(instruction),
-        make_arg(instruction, jump_colors),
-        make_arg_repr(instruction, jump_colors),
+        make_arg(instruction, jump_color_map),
+        make_arg_repr(instruction, jump_color_map),
     )
 
 
@@ -198,7 +226,7 @@ def make_blank_instruction_rows(n: int) -> List[T_INSTRUCTION_ROW]:
     return [(Text(),) * len(INSTRUCTION_GRID_HEADERS)] * n
 
 
-def find_jump_colors(instructions: List[dis.Instruction]) -> T_JUMP_COLORS:
+def find_jump_colors(instructions: List[dis.Instruction]) -> T_JUMP_COLOR_MAP:
     jump_targets = [i.offset for i in instructions if i.is_jump_target]
     jump_colors = {
         j: color for j, color in zip(jump_targets, random.sample(JUMP_COLORS, len(jump_targets)))
@@ -212,9 +240,9 @@ def calculate_half_width(line_numbers: str) -> int:
     return half_width
 
 
-def make_offset(instruction: dis.Instruction, jump_colors: T_JUMP_COLORS) -> Text:
+def make_offset(instruction: dis.Instruction, jump_color_map: T_JUMP_COLOR_MAP) -> Text:
     return Text(
-        str(instruction.offset), style=Style(color=jump_colors.get(instruction.offset, None))
+        str(instruction.offset), style=Style(color=jump_color_map.get(instruction.offset, None))
     )
 
 
@@ -222,18 +250,18 @@ def make_opname(instruction: dis.Instruction) -> Text:
     return Text(instruction.opname + "  ")
 
 
-def make_arg(instruction: dis.Instruction, jump_colors: T_JUMP_COLORS) -> Text:
+def make_arg(instruction: dis.Instruction, jump_color_map: T_JUMP_COLOR_MAP) -> Text:
     return Text(
         str(instruction.arg) if instruction.arg is not None else "",
-        style=Style(color=jump_colors.get(instruction.arg)),
+        style=Style(color=jump_color_map.get(instruction.arg)),
     )
 
 
-def make_arg_repr(instruction: dis.Instruction, jump_colors: T_JUMP_COLORS) -> Text:
+def make_arg_repr(instruction: dis.Instruction, jump_color_map: T_JUMP_COLOR_MAP) -> Text:
     match = RE_JUMP.match(instruction.argrepr)
     return Text(
         f"{instruction.argrepr}",
-        style=Style(color=jump_colors.get(int(match.group(1)))) if match else None,
+        style=Style(color=jump_color_map.get(int(match.group(1)))) if match else None,
         no_wrap=True,
     )
 
