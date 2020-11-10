@@ -5,6 +5,7 @@ import string
 import sys
 import traceback
 from pathlib import Path
+from typing import List
 
 import pytest
 from click.testing import CliRunner, Result
@@ -29,9 +30,10 @@ def runner() -> CliRunner:
     return CliRunner()
 
 
-def invoke_with_debug(runner: CliRunner, cli, *args, **kwargs) -> Result:
-    print("command:", args[0])
-    result = runner.invoke(cli, *args, **kwargs)
+def invoke_with_debug(runner: CliRunner, cli, command: List[str], **kwargs) -> Result:
+    command.append("--no-paging")
+    print("command:", command)
+    result = runner.invoke(cli=cli, args=command, **kwargs)
 
     print("result:", result)
 
