@@ -16,11 +16,27 @@ def {FUNC_NAME}():
     pass
 """
 
+CLASS_NAME = "Foo"
+METHOD_NAME = "bar"
+CLASS = f"""
+class {CLASS_NAME}:
+    def {METHOD_NAME}(self):
+        pass
+"""
+
 
 @pytest.fixture
 def source_path_with_func(test_dir, filename) -> Path:
     source_path = test_dir / f"{filename}.py"
     source_path.write_text(FUNC)
+
+    return source_path
+
+
+@pytest.fixture
+def source_path_with_class(test_dir, filename) -> Path:
+    source_path = test_dir / f"{filename}.py"
+    source_path.write_text(CLASS)
 
     return source_path
 
@@ -90,11 +106,33 @@ def test_targetting_a_class_redirects_to_init(cli, test_dir, filename):
     assert "foobar" in result.output
 
 
-def test_cannot_dissassemble_module(cli):
-    result = cli(["click.testing"])
+@pytest.mark.parametrize(
+    "target",
+    [
+        "click",  # top-level module
+        "click.testing",  # submodule
+    ],
+)
+def test_gracefully_cannot_disassemble_module(cli, target):
+    result = cli([target])
 
     assert result.exit_code == 1
     assert "Cannot disassemble modules" in result.output
+
+
+def test_can_target_method(cli, source_path_with_class):
+    result = cli([f"{source_path_with_class.stem}.{CLASS_NAME}.{METHOD_NAME}"])
+
+    assert result.exit_code == 0
+
+
+def test_module_not_found(cli):
+    target = "fidsjofoiasjoifdj"
+    result = cli([target])
+
+    assert result.exit_code == 1
+    assert "No module named" in result.output
+    assert target in result.output
 
 
 def test_version(cli):

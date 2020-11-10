@@ -37,6 +37,9 @@ INSTRUCTION_GRID_HEADERS = ["OFF", "OPERATION", "ARGS", ""]
 T_INSTRUCTION_ROW = Tuple[Text, ...]
 
 
+NUMBER_COLUMN_WIDTH = 4
+
+
 @click.command()
 @click.argument("target", nargs=-1)
 @click.option(
@@ -57,6 +60,8 @@ def cli(
     """
     Display the source and bytecode of the TARGET Python functions.
 
+    If you TARGET a class, its __init__ method will be displayed.
+
     Any number of TARGETs may be passed; they will be displayed sequentially.
     """
     # Make sure the cwd (implicit starting point for the import path) is actually on PYTHONPATH.
@@ -70,10 +75,10 @@ def cli(
     parts = itertools.chain.from_iterable(display.parts for display in displays)
     total_height = sum(display.height for display in displays)
 
-    if paging is None:
+    if paging is None:  # pragma: no cover
         paging = total_height > (shutil.get_terminal_size((80, 20)).lines - 5)
 
-    if paging:
+    if paging:  # pragma: no cover
         with console.pager(styles=True):
             console.print(*parts)
     else:
@@ -96,6 +101,13 @@ def make_source_and_bytecode_displays_for_targets(
 def find_function(target: str) -> FunctionType:
     parts = target.split(".")
 
+    if len(parts) == 1:
+        try:
+            raise target_was_a_module(silent_import(parts[0]))
+        except ModuleNotFoundError as e:
+            # target was not *actually* a module
+            raise click.ClickException(str(e))
+
     # Walk backwards along the split parts and try to do the import.
     # This makes the import go as deep as possible.
     for split_point in range(len(parts) - 1, 0, -1):
@@ -116,7 +128,7 @@ def find_function(target: str) -> FunctionType:
             )
 
     if inspect.ismodule(obj):
-        raise click.ClickException("Cannot disassemble modules. Target a specific function.")
+        raise target_was_a_module(obj)
 
     # If the target is a class, display its __init__ method
     if inspect.isclass(obj):
@@ -137,6 +149,33 @@ def silent_import(module_path: str) -> ModuleType:
             raise click.ClickException(
                 f"Encountered an exception during import of module {module_path}:\n{traceback.format_exc()}"
             )
+
+
+def target_was_a_module(module: ModuleType) -> click.ClickException:
+    possibilities = list(find_functions(module))
+
+    if len(possibilities) == 0:
+        return click.ClickException(f"Cannot disassemble modules. Target a specific function.")
+    choice = random.choice(possibilities)
+    suggestion = click.style(f"{choice.__module__}.{choice.__qualname__}", bold=True)
+    return click.ClickException(
+        f"Cannot disassemble modules. Target a specific function, like {suggestion}"
+    )
+
+
+def find_functions(
+    module: ModuleType, top_module: Optional[ModuleType] = None
+) -> Iterable[FunctionType]:
+    for obj in vars(module).values():
+        if (inspect.ismodule(module) and inspect.getmodule(obj) != module) or (
+            inspect.isclass(module) and inspect.getmodule(module) != top_module
+        ):
+            continue
+
+        if inspect.isfunction(obj):
+            yield obj
+        elif inspect.isclass(obj):
+            yield from find_functions(obj, top_module=top_module or module)
 
 
 def make_source_and_bytecode_display(function: FunctionType, theme: str) -> Display:
@@ -204,7 +243,7 @@ def align_source_and_instructions(
             ]
             nums.extend(
                 (
-                    str(n) if not len(line.strip()) == 0 else ""
+                    str(n).rjust(NUMBER_COLUMN_WIDTH) if not len(line.strip()) == 0 else ""
                     for n, line in enumerate(new_code_lines, start=last_line_idx + 1)
                 )
             )
@@ -248,7 +287,7 @@ def find_jump_colors(instructions: List[dis.Instruction]) -> T_JUMP_COLOR_MAP:
 
 
 def calculate_half_width(line_numbers: str) -> int:
-    full_width = shutil.get_terminal_size().columns - 6
+    full_width = shutil.get_terminal_size().columns - (2 + (NUMBER_COLUMN_WIDTH * 2))
     half_width = (full_width - (max(map(len, line_numbers)) * 2)) // 2
     return half_width
 
