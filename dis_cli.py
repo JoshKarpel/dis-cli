@@ -153,7 +153,7 @@ class Target:
             module_path, obj_path = ".".join(parts[:split_point]), ".".join(parts[split_point:])
 
             try:
-                module = obj = silent_import(module_path)
+                obj = silent_import(module_path)
                 break
             except ModuleNotFoundError:
                 pass
@@ -180,7 +180,7 @@ def make_source_and_bytecode_displays_for_targets(
         elif target.is_function:
             yield target.make_display(theme)
         else:
-            cannot_be_dissassembled(target)
+            cannot_be_disassembled(target)
 
 
 def silent_import(module_path: str) -> ModuleType:
@@ -197,7 +197,7 @@ def silent_import(module_path: str) -> ModuleType:
             )
 
 
-def cannot_be_dissassembled(target: Target):
+def cannot_be_disassembled(target: Target):
     possible_targets = find_child_targets(target)
 
     msg = f"The target {target.path} = {target.obj} is a {type(target).__name__}, which cannot be disassembled. Target a specific function"
