@@ -2,6 +2,7 @@
 
 import contextlib
 import dis
+import functools
 import importlib
 import inspect
 import itertools
@@ -15,7 +16,7 @@ import traceback
 from dataclasses import dataclass
 from pathlib import Path
 from types import FunctionType, ModuleType
-from typing import Any, Dict, Iterable, List, Optional, Tuple, Union
+from typing import Dict, Iterable, Iterator, List, Optional, Tuple, Union
 
 import click
 from rich.color import ANSI_COLOR_NAMES
@@ -27,6 +28,11 @@ from rich.syntax import Syntax
 from rich.table import Table
 from rich.text import Text
 
+if sys.version_info >= (3, 8):
+    from functools import cached_property
+else:
+    cached_property = lambda func: property(functools.lru_cache(maxsize=None)(func))
+
 T_JUMP_COLOR_MAP = Dict[int, str]
 JUMP_COLORS = [
     c for c in ANSI_COLOR_NAMES.keys() if not any(("grey" in c, "black" in c, "white" in c))
@@ -36,20 +42,29 @@ RE_JUMP = re.compile(r"to (\d+)")
 INSTRUCTION_GRID_HEADERS = ["OFF", "OPERATION", "ARGS", ""]
 T_INSTRUCTION_ROW = Tuple[Text, ...]
 
+T_CLASS_OR_MODULE = Union[type, ModuleType]
+T_FUNCTION_OR_CLASS_OR_MODULE = Union[FunctionType, T_CLASS_OR_MODULE]
 
 NUMBER_COLUMN_WIDTH = 4
 
+DEFAULT_THEME = "monokai"
+
 
 @click.command()
-@click.argument("target", nargs=-1)
+@click.argument(
+    "target",
+    nargs=-1,
+)
 @click.option(
-    "--theme", default="monokai", help="Choose the syntax highlighting theme (any Pygments theme)."
+    "--theme",
+    default=DEFAULT_THEME,
+    help=f"Choose the syntax highlighting theme (any Pygments theme). Default: {DEFAULT_THEME!r}.",
 )
 @click.option(
     "-p/-P",
     "--paging/--no-paging",
     default=None,
-    help="Enable/disable displaying output using the system pager. If not passed explicitly, the pager will automatically be used if the output is taller than your terminal.",
+    help="Enable/disable displaying output using the system pager. Default: enabled if the output is taller than your terminal window.",
 )
 @click.version_option()
 def cli(
@@ -60,7 +75,8 @@ def cli(
     """
     Display the source and bytecode of the TARGET Python functions.
 
-    If you TARGET a class, its __init__ method will be displayed.
+    If you TARGET a class, all of its methods will be targeted.
+    If you TARGET a module, all of its functions and classes (and therefore their methods) will be targeted.
 
     Any number of TARGETs may be passed; they will be displayed sequentially.
     """
@@ -71,7 +87,7 @@ def cli(
 
     console = Console(highlight=True, tab_size=4)
 
-    displays = list(make_source_and_bytecode_displays_for_targets(targets=target, theme=theme))
+    displays = list(make_source_and_bytecode_displays_for_targets(target_paths=target, theme=theme))
     parts = itertools.chain.from_iterable(display.parts for display in displays)
     total_height = sum(display.height for display in displays)
 
@@ -91,51 +107,81 @@ class Display:
     height: int
 
 
+@dataclass(frozen=True)
+class Target:
+    obj: T_FUNCTION_OR_CLASS_OR_MODULE
+    path: str
+    imported_from: Optional[ModuleType] = None
+
+    @cached_property
+    def module(self):
+        return self.imported_from or (self.obj if self.is_module else inspect.getmodule(self.obj))
+
+    @cached_property
+    def is_module(self) -> bool:
+        return inspect.ismodule(self.obj)
+
+    @cached_property
+    def is_class(self) -> bool:
+        return inspect.isclass(self.obj)
+
+    @cached_property
+    def is_class_or_module(self) -> bool:
+        return self.is_class or self.is_module
+
+    @cached_property
+    def is_function(self) -> bool:
+        return inspect.isfunction(self.obj)
+
+    def make_display(self, theme: str) -> Display:
+        return make_source_and_bytecode_display_for_function(self.obj, theme)
+
+    @classmethod
+    def from_path(cls, path: str) -> "Target":
+        parts = path.split(".")
+
+        if len(parts) == 1:
+            try:
+                module = silent_import(parts[0])
+                return cls(obj=module, path=path)
+            except ModuleNotFoundError as e:
+                # target was not *actually* a module
+                raise click.ClickException(str(e))
+
+        # Walk backwards along the split parts and try to do the import.
+        # This makes the import go as deep as possible.
+        for split_point in range(len(parts) - 1, 0, -1):
+            module_path, obj_path = ".".join(parts[:split_point]), ".".join(parts[split_point:])
+
+            try:
+                module = obj = silent_import(module_path)
+                break
+            except ModuleNotFoundError:
+                pass
+
+        for target_path_part in obj_path.split("."):
+            try:
+                obj = getattr(obj, target_path_part)
+            except AttributeError:
+                raise click.ClickException(
+                    f"No attribute named {target_path_part!r} found on {type(obj).__name__} {obj!r}."
+                )
+
+        return cls(obj=obj, path=path, imported_from=module)
+
+
 def make_source_and_bytecode_displays_for_targets(
-    targets: Iterable[str], theme: str
-) -> Iterable[Display]:
-    for func in map(find_function, targets):
-        yield make_source_and_bytecode_display(func, theme)
+    target_paths: Iterable[str], theme: str
+) -> Iterator[Display]:
+    for path in target_paths:
+        target = Target.from_path(path)
 
-
-def find_function(target: str) -> FunctionType:
-    parts = target.split(".")
-
-    if len(parts) == 1:
-        try:
-            module = silent_import(parts[0])
-            raise bad_target(target, module, module)
-        except ModuleNotFoundError as e:
-            # target was not *actually* a module
-            raise click.ClickException(str(e))
-
-    # Walk backwards along the split parts and try to do the import.
-    # This makes the import go as deep as possible.
-    for split_point in range(len(parts) - 1, 0, -1):
-        module_path, target_path = ".".join(parts[:split_point]), ".".join(parts[split_point:])
-
-        try:
-            module = obj = silent_import(module_path)
-            break
-        except ModuleNotFoundError:
-            pass
-
-    for target_path_part in target_path.split("."):
-        try:
-            obj = getattr(obj, target_path_part)
-        except AttributeError:
-            raise click.ClickException(
-                f"No attribute named {target_path_part!r} found on {type(obj).__name__} {obj!r}."
-            )
-
-    # If the target is a class, display its __init__ method
-    if inspect.isclass(obj):
-        obj = obj.__init__  # type: ignore
-
-    if not inspect.isfunction(obj):
-        raise bad_target(target, obj, module)
-
-    return obj
+        if target.is_class_or_module:
+            yield from (t.make_display(theme) for t in find_child_targets(target))
+        elif target.is_function:
+            yield target.make_display(theme)
+        else:
+            cannot_be_disassembled(target)
 
 
 def silent_import(module_path: str) -> ModuleType:
@@ -152,41 +198,53 @@ def silent_import(module_path: str) -> ModuleType:
             )
 
 
-def bad_target(target: str, obj: Any, module: ModuleType) -> click.ClickException:
-    possible_targets = find_possible_targets(module)
+def cannot_be_disassembled(target: Target):
+    msg = f"The target {target.path} = {target.obj} is a {type(target.obj).__name__}, which cannot be disassembled. Target a specific function"
 
-    msg = f"The target {target} = {obj} is a {type(obj).__name__}, which cannot be disassembled. Target a specific function"
+    possible_targets = find_child_targets(target)
+    if len(possible_targets) == 0:
+        possible_targets = find_child_targets(
+            Target(obj=target.module, path=".".join(target.path.split(".")[:-1]))
+        )
 
     if len(possible_targets) == 0:
-        return click.ClickException(f"{msg}.")
+        raise click.ClickException(f"{msg}.")
     else:
         choice = random.choice(possible_targets)
-        suggestion = click.style(f"{choice.__module__}.{choice.__qualname__}", bold=True)
-        return click.ClickException(f"{msg}, like {suggestion}")
+        suggestion = click.style(choice.path, bold=True)
+        raise click.ClickException(f"{msg}, like {suggestion}")
 
 
-def find_possible_targets(obj: ModuleType) -> List[FunctionType]:
-    return list(_find_possible_targets(obj))
+def find_child_targets(target: Target) -> List[Target]:
+    return list(_find_child_targets(target, top_module=target.module))
 
 
-def _find_possible_targets(
-    module: ModuleType, top_module: Optional[ModuleType] = None
-) -> Iterable[FunctionType]:
-    for obj in vars(module).values():
-        if (inspect.ismodule(module) and inspect.getmodule(obj) != module) or (
-            inspect.isclass(module) and inspect.getmodule(module) != top_module
-        ):
+def _find_child_targets(target: Target, top_module: ModuleType) -> Iterable[Target]:
+    try:
+        children = vars(target.obj)
+    except TypeError:  # vars() argument must have __dict__ attribute
+        return
+
+    for child in children.values():
+        if inspect.getmodule(child) != top_module:  # Do not go outside of the top module
             continue
+        elif inspect.isclass(child):  # Recurse into classes
+            yield from _find_child_targets(
+                Target(obj=child, path=f"{target.path}.{child.__name__}"),
+                top_module=top_module,
+            )
+        elif inspect.isfunction(child):
+            yield Target(obj=child, path=f"{target.path}.{child.__name__}")
 
-        if inspect.isfunction(obj):
-            yield obj
-        elif inspect.isclass(obj):
-            yield from _find_possible_targets(obj, top_module=top_module or module)
 
-
-def make_source_and_bytecode_display(function: FunctionType, theme: str) -> Display:
+def make_source_and_bytecode_display_for_function(function: FunctionType, theme: str) -> Display:
     instructions = list(dis.Bytecode(function))
-    source_lines, start_line = inspect.getsourcelines(function)
+
+    try:
+        source_lines, start_line = inspect.getsourcelines(function)
+    except OSError:  # This might happen if the source code is generated
+        source_lines = ["NO SOURCE CODE FOUND"]
+        start_line = -1
 
     jump_color_map = find_jump_colors(instructions)
 
@@ -218,14 +276,14 @@ def make_source_and_bytecode_display(function: FunctionType, theme: str) -> Disp
 
 
 def make_title(function, start_line: int) -> Text:
-    path = Path(inspect.getmodule(function).__file__)
+    source_file_path = Path(inspect.getmodule(function).__file__)
     try:
-        path = path.relative_to(Path.cwd())
+        source_file_path = source_file_path.relative_to(Path.cwd())
     except ValueError:  # path is not under the cwd
         pass
 
     return Text.from_markup(
-        f"{type(function).__name__} [bold]{function.__module__}.{function.__qualname__}[/bold] from {path}:{start_line}"
+        f"{type(function).__name__} [bold]{function.__module__}.{function.__qualname__}[/bold] from {source_file_path}:{start_line}"
     )
 
 
@@ -370,15 +428,6 @@ def make_bytecode_block(
         grid.add_row(*row, style=Style(color="bright_white"))
 
     return grid
-
-
-def get_own_version() -> str:  # pragma: versioned
-    if sys.version_info < (3, 8):
-        import importlib_metadata
-    else:
-        import importlib.metadata as importlib_metadata
-
-    return importlib_metadata.version("dis_cli")
 
 
 if __name__ == "__main__":

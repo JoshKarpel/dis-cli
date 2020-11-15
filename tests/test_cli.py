@@ -1,9 +1,8 @@
+import sys
 import textwrap
 from pathlib import Path
 
 import pytest
-
-from dis_cli import get_own_version
 
 
 def test_smoke(cli):
@@ -86,7 +85,7 @@ def test_module_level_error_is_handled_gracefully(cli, test_dir, filename, extra
     assert "during import" in result.output
 
 
-def test_targeting_a_class_redirects_to_init(cli, test_dir, filename):
+def test_targeting_a_class_targets_all_of_its_methods(cli, test_dir, filename):
     source_path = test_dir / f"{filename}.py"
     source_path.write_text(
         textwrap.dedent(
@@ -94,6 +93,9 @@ def test_targeting_a_class_redirects_to_init(cli, test_dir, filename):
     class Foo:
         def __init__(self):
             print("foobar")
+
+        def method(self):
+            print("wizbang")
     """
         )
     )
@@ -103,6 +105,65 @@ def test_targeting_a_class_redirects_to_init(cli, test_dir, filename):
 
     assert result.exit_code == 0
     assert "foobar" in result.output
+    assert "wizbang" in result.output
+
+
+@pytest.mark.skipif(
+    sys.version_info < (3, 7), reason="Non-native dataclasses don't behave the same"
+)
+def test_can_dis_dataclass(cli, test_dir, filename):
+    """
+    Dataclasses have generated methods with no matching source that we need a special case for.
+    """
+    source_path = test_dir / f"{filename}.py"
+    source_path.write_text(
+        textwrap.dedent(
+            """\
+    from dataclasses import dataclass
+
+    @dataclass
+    class Foo:
+        attr: int
+    """
+        )
+    )
+    print(source_path.read_text())
+
+    result = cli([f"{source_path.stem}.Foo"])
+
+    assert result.exit_code == 0
+    assert "NO SOURCE CODE FOUND" in result.output
+
+
+def test_targeting_a_module_targets_its_members(cli, test_dir, filename):
+    source_path = test_dir / f"{filename}.py"
+    source_path.write_text(
+        textwrap.dedent(
+            """\
+    import itertools
+    from os.path import join
+
+    def func():
+        print("hello")
+
+    class Foo:
+        def __init__(self):
+            print("foobar")
+
+        def method(self):
+            print("wizbang")
+    """
+        )
+    )
+    print(source_path.read_text())
+
+    result = cli([f"{source_path.stem}"])
+
+    assert "combinations" not in result.output  # doesn't see imported functions
+    assert "join" not in result.output  # doesn't see imported functions
+    assert "hello" in result.output
+    assert "foobar" in result.output
+    assert "wizbang" in result.output
 
 
 def test_can_target_method(cli, source_path):
@@ -124,21 +185,6 @@ def test_module_not_found(cli):
 @pytest.mark.parametrize(
     "target",
     [
-        "click",  # top-level module
-        "click.testing",  # submodule
-    ],
-)
-def test_gracefully_cannot_disassemble_module(cli, target):
-    result = cli([target])
-
-    assert result.exit_code == 1
-    assert "cannot be disassembled" in result.output
-    assert "module" in result.output
-
-
-@pytest.mark.parametrize(
-    "target",
-    [
         f"{CONST_NAME}",
         f"{CLASS_NAME}.{ATTR_NAME}",
         f"{NONE_NAME}",
@@ -149,9 +195,3 @@ def test_cannot_be_disassembled(cli, source_path, target):
 
     assert result.exit_code == 1
     assert "cannot be disassembled" in result.output
-
-
-def test_version(cli):
-    result = cli(["--version"])
-
-    assert get_own_version() in result.output
