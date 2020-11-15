@@ -4,8 +4,10 @@ from pathlib import Path
 
 import pytest
 
+from .conftest import T_CLI
 
-def test_smoke(cli):
+
+def test_smoke(cli: T_CLI) -> None:
     assert cli(["dis.dis"]).exit_code == 0
 
 
@@ -32,26 +34,26 @@ class {CLASS_NAME}:
 
 
 @pytest.fixture
-def source_path(test_dir, filename) -> Path:
+def source_path(test_dir: Path, filename: str) -> Path:
     source_path = test_dir / f"{filename}.py"
     source_path.write_text(SOURCE)
 
     return source_path
 
 
-def test_runs_successfully_on_func_source(cli, source_path):
+def test_runs_successfully_on_func_source(cli: T_CLI, source_path: Path) -> None:
     result = cli([f"{source_path.stem}.{FUNC_NAME}"])
 
     assert result.exit_code == 0
 
 
-def test_func_source_in_output(cli, source_path):
+def test_func_source_in_output(cli: T_CLI, source_path: Path) -> None:
     result = cli([f"{source_path.stem}.{FUNC_NAME}"])
 
     assert f"def {FUNC_NAME}():" in result.output
 
 
-def test_handle_missing_target_gracefully(cli, source_path):
+def test_handle_missing_target_gracefully(cli: T_CLI, source_path: Path) -> None:
     result = cli([f"{source_path.stem}.{FUNC_NAME}osidjafoa"])
 
     assert result.exit_code == 1
@@ -62,7 +64,9 @@ def test_handle_missing_target_gracefully(cli, source_path):
 @pytest.mark.parametrize(
     "extra_source", ["print('hi')", "import sys\nprint('hi', file=sys.stderr)"]
 )
-def test_module_level_output_is_not_shown(cli, test_dir, filename, extra_source):
+def test_module_level_output_is_not_shown(
+    cli: T_CLI, test_dir: Path, filename: str, extra_source: str
+) -> None:
     source_path = test_dir / f"{filename}.py"
     source_path.write_text(f"{extra_source}\n{SOURCE}")
     print(source_path.read_text())
@@ -74,7 +78,9 @@ def test_module_level_output_is_not_shown(cli, test_dir, filename, extra_source)
 
 
 @pytest.mark.parametrize("extra_source", ["raise Exception", "syntax error"])
-def test_module_level_error_is_handled_gracefully(cli, test_dir, filename, extra_source):
+def test_module_level_error_is_handled_gracefully(
+    cli: T_CLI, test_dir: Path, filename: str, extra_source: str
+) -> None:
     source_path = test_dir / f"{filename}.py"
     source_path.write_text(f"{extra_source}\n{SOURCE}")
     print(source_path.read_text())
@@ -85,7 +91,9 @@ def test_module_level_error_is_handled_gracefully(cli, test_dir, filename, extra
     assert "during import" in result.output
 
 
-def test_targeting_a_class_targets_all_of_its_methods(cli, test_dir, filename):
+def test_targeting_a_class_targets_all_of_its_methods(
+    cli: T_CLI, test_dir: Path, filename: str
+) -> None:
     source_path = test_dir / f"{filename}.py"
     source_path.write_text(
         textwrap.dedent(
@@ -111,7 +119,7 @@ def test_targeting_a_class_targets_all_of_its_methods(cli, test_dir, filename):
 @pytest.mark.skipif(
     sys.version_info < (3, 7), reason="Non-native dataclasses don't behave the same"
 )
-def test_can_dis_dataclass(cli, test_dir, filename):
+def test_can_dis_dataclass(cli: T_CLI, test_dir: Path, filename: str) -> None:
     """
     Dataclasses have generated methods with no matching source that we need a special case for.
     """
@@ -135,7 +143,7 @@ def test_can_dis_dataclass(cli, test_dir, filename):
     assert "NO SOURCE CODE FOUND" in result.output
 
 
-def test_targeting_a_module_targets_its_members(cli, test_dir, filename):
+def test_targeting_a_module_targets_its_members(cli: T_CLI, test_dir: Path, filename: str) -> None:
     source_path = test_dir / f"{filename}.py"
     source_path.write_text(
         textwrap.dedent(
@@ -166,14 +174,14 @@ def test_targeting_a_module_targets_its_members(cli, test_dir, filename):
     assert "wizbang" in result.output
 
 
-def test_can_target_method(cli, source_path):
+def test_can_target_method(cli: T_CLI, source_path: Path) -> None:
     result = cli([f"{source_path.stem}.{CLASS_NAME}.{METHOD_NAME}"])
 
     assert result.exit_code == 0
     assert METHOD_NAME in result.output
 
 
-def test_module_not_found(cli):
+def test_module_not_found(cli: T_CLI) -> None:
     target = "fidsjofoiasjoifdj"
     result = cli([target])
 
@@ -183,15 +191,15 @@ def test_module_not_found(cli):
 
 
 @pytest.mark.parametrize(
-    "target",
+    "target_path",
     [
         f"{CONST_NAME}",
         f"{CLASS_NAME}.{ATTR_NAME}",
         f"{NONE_NAME}",
     ],
 )
-def test_cannot_be_disassembled(cli, source_path, target):
-    result = cli([f"{source_path.stem}.{target}"])
+def test_cannot_be_disassembled(cli: T_CLI, source_path: Path, target_path: str) -> None:
+    result = cli([f"{source_path.stem}.{target_path}"])
 
     assert result.exit_code == 1
     assert "cannot be disassembled" in result.output
