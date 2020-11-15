@@ -86,7 +86,7 @@ def test_module_level_error_is_handled_gracefully(cli, test_dir, filename, extra
     assert "during import" in result.output
 
 
-def test_targeting_a_class_redirects_to_init(cli, test_dir, filename):
+def test_targeting_a_class_targets_all_of_its_methods(cli, test_dir, filename):
     source_path = test_dir / f"{filename}.py"
     source_path.write_text(
         textwrap.dedent(
@@ -94,6 +94,9 @@ def test_targeting_a_class_redirects_to_init(cli, test_dir, filename):
     class Foo:
         def __init__(self):
             print("foobar")
+        
+        def method(self):
+            print("wizbang")
     """
         )
     )
@@ -103,6 +106,38 @@ def test_targeting_a_class_redirects_to_init(cli, test_dir, filename):
 
     assert result.exit_code == 0
     assert "foobar" in result.output
+    assert "wizbang" in result.output
+
+
+def test_targeting_a_module_targets_its_members(cli, test_dir, filename):
+    source_path = test_dir / f"{filename}.py"
+    source_path.write_text(
+        textwrap.dedent(
+            """\
+    import itertools
+    from os.path import join
+    
+    def func():
+        print("hello")
+    
+    class Foo:
+        def __init__(self):
+            print("foobar")
+
+        def method(self):
+            print("wizbang")
+    """
+        )
+    )
+    print(source_path.read_text())
+
+    result = cli([f"{source_path.stem}"])
+
+    assert "combinations" not in result.output  # doesn't see imported functions
+    assert "join" not in result.output  # doesn't see imported functions
+    assert "hello" in result.output
+    assert "foobar" in result.output
+    assert "wizbang" in result.output
 
 
 def test_can_target_method(cli, source_path):
@@ -119,21 +154,6 @@ def test_module_not_found(cli):
     assert result.exit_code == 1
     assert "No module named" in result.output
     assert target in result.output
-
-
-@pytest.mark.parametrize(
-    "target",
-    [
-        "click",  # top-level module
-        "click.testing",  # submodule
-    ],
-)
-def test_gracefully_cannot_disassemble_module(cli, target):
-    result = cli([target])
-
-    assert result.exit_code == 1
-    assert "cannot be disassembled" in result.output
-    assert "module" in result.output
 
 
 @pytest.mark.parametrize(

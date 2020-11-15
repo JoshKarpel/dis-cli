@@ -15,7 +15,7 @@ import traceback
 from dataclasses import dataclass
 from pathlib import Path
 from types import FunctionType, ModuleType
-from typing import Any, Dict, Iterable, List, Optional, Tuple, Union
+from typing import Any, Dict, Iterable, List, Optional, Tuple, Union, Iterator
 
 import click
 from rich.color import ANSI_COLOR_NAMES
@@ -36,6 +36,7 @@ RE_JUMP = re.compile(r"to (\d+)")
 INSTRUCTION_GRID_HEADERS = ["OFF", "OPERATION", "ARGS", ""]
 T_INSTRUCTION_ROW = Tuple[Text, ...]
 
+T_CLASS_OR_MODULE = Union[type, ModuleType]
 
 NUMBER_COLUMN_WIDTH = 4
 
@@ -93,18 +94,30 @@ class Display:
 
 def make_source_and_bytecode_displays_for_targets(
     targets: Iterable[str], theme: str
-) -> Iterable[Display]:
-    for func in map(find_function, targets):
-        yield make_source_and_bytecode_display(func, theme)
+) -> Iterator[Display]:
+    for target in targets:
+        module, obj = import_target(target)
+
+        if inspect.isclass(obj) or inspect.ismodule(obj):
+            yield from (
+                make_source_and_bytecode_display(function, theme)
+                for function in find_functions(obj)
+            )
+        elif inspect.isfunction(obj):
+            yield make_source_and_bytecode_display(obj, theme)
+        else:
+            cannot_be_dissassembled(target, obj, module)
 
 
-def find_function(target: str) -> FunctionType:
+def import_target(
+    target: str,
+) -> Tuple[ModuleType, Union[ModuleType, type, FunctionType]]:
     parts = target.split(".")
 
     if len(parts) == 1:
         try:
             module = silent_import(parts[0])
-            raise bad_target(target, module, module)
+            return module, module
         except ModuleNotFoundError as e:
             # target was not *actually* a module
             raise click.ClickException(str(e))
@@ -128,14 +141,7 @@ def find_function(target: str) -> FunctionType:
                 f"No attribute named {target_path_part!r} found on {type(obj).__name__} {obj!r}."
             )
 
-    # If the target is a class, display its __init__ method
-    if inspect.isclass(obj):
-        obj = obj.__init__  # type: ignore
-
-    if not inspect.isfunction(obj):
-        raise bad_target(target, obj, module)
-
-    return obj
+    return module, obj
 
 
 def silent_import(module_path: str) -> ModuleType:
@@ -152,41 +158,45 @@ def silent_import(module_path: str) -> ModuleType:
             )
 
 
-def bad_target(target: str, obj: Any, module: ModuleType) -> click.ClickException:
-    possible_targets = find_possible_targets(module)
+def cannot_be_dissassembled(target: str, obj: Any, module: ModuleType):
+    possible_targets = find_functions(module)
 
     msg = f"The target {target} = {obj} is a {type(obj).__name__}, which cannot be disassembled. Target a specific function"
 
     if len(possible_targets) == 0:
-        return click.ClickException(f"{msg}.")
+        raise click.ClickException(f"{msg}.")
     else:
         choice = random.choice(possible_targets)
         suggestion = click.style(f"{choice.__module__}.{choice.__qualname__}", bold=True)
-        return click.ClickException(f"{msg}, like {suggestion}")
+        raise click.ClickException(f"{msg}, like {suggestion}")
 
 
-def find_possible_targets(obj: ModuleType) -> List[FunctionType]:
-    return list(_find_possible_targets(obj))
+def find_functions(obj: T_CLASS_OR_MODULE) -> List[FunctionType]:
+    return list(
+        _find_functions(obj, top_module=obj if inspect.ismodule(obj) else inspect.getmodule(obj))
+    )
 
 
-def _find_possible_targets(
-    module: ModuleType, top_module: Optional[ModuleType] = None
+def _find_functions(
+    obj: T_CLASS_OR_MODULE, top_module: Optional[ModuleType] = None
 ) -> Iterable[FunctionType]:
-    for obj in vars(module).values():
-        if (inspect.ismodule(module) and inspect.getmodule(obj) != module) or (
-            inspect.isclass(module) and inspect.getmodule(module) != top_module
-        ):
+    for child in vars(obj).values():
+        if not inspect.getmodule(child) == top_module:
             continue
 
-        if inspect.isfunction(obj):
-            yield obj
-        elif inspect.isclass(obj):
-            yield from _find_possible_targets(obj, top_module=top_module or module)
+        if inspect.isfunction(child):
+            yield child
+        elif inspect.isclass(child):  # Recurse into classes
+            yield from _find_functions(child, top_module=top_module)
 
 
 def make_source_and_bytecode_display(function: FunctionType, theme: str) -> Display:
     instructions = list(dis.Bytecode(function))
-    source_lines, start_line = inspect.getsourcelines(function)
+    try:
+        source_lines, start_line = inspect.getsourcelines(function)
+    except OSError:
+        source_lines = ["NO SOURCE CODE FOUND"]
+        start_line = -1
 
     jump_color_map = find_jump_colors(instructions)
 
