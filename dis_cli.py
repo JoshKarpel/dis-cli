@@ -111,10 +111,11 @@ class Display:
 class Target:
     obj: T_FUNCTION_OR_CLASS_OR_MODULE
     path: str
+    imported_from: Optional[ModuleType] = None
 
     @cached_property
     def module(self):
-        return self.obj if self.is_module else inspect.getmodule(self.obj)
+        return self.imported_from or (self.obj if self.is_module else inspect.getmodule(self.obj))
 
     @cached_property
     def is_module(self) -> bool:
@@ -153,7 +154,7 @@ class Target:
             module_path, obj_path = ".".join(parts[:split_point]), ".".join(parts[split_point:])
 
             try:
-                obj = silent_import(module_path)
+                module = obj = silent_import(module_path)
                 break
             except ModuleNotFoundError:
                 pass
@@ -166,7 +167,7 @@ class Target:
                     f"No attribute named {target_path_part!r} found on {type(obj).__name__} {obj!r}."
                 )
 
-        return cls(obj=obj, path=path)
+        return cls(obj=obj, path=path, imported_from=module)
 
 
 def make_source_and_bytecode_displays_for_targets(
@@ -198,15 +199,19 @@ def silent_import(module_path: str) -> ModuleType:
 
 
 def cannot_be_disassembled(target: Target):
-    possible_targets = find_child_targets(target)
+    msg = f"The target {target.path} = {target.obj} is a {type(target.obj).__name__}, which cannot be disassembled. Target a specific function"
 
-    msg = f"The target {target.path} = {target.obj} is a {type(target).__name__}, which cannot be disassembled. Target a specific function"
+    possible_targets = find_child_targets(target)
+    if len(possible_targets) == 0:
+        possible_targets = find_child_targets(
+            Target(obj=target.module, path=".".join(target.path.split(".")[:-1]))
+        )
 
     if len(possible_targets) == 0:
         raise click.ClickException(f"{msg}.")
     else:
         choice = random.choice(possible_targets)
-        suggestion = click.style(f"{choice.__module__}.{choice.__qualname__}", bold=True)
+        suggestion = click.style(choice.path, bold=True)
         raise click.ClickException(f"{msg}, like {suggestion}")
 
 
