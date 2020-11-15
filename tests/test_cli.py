@@ -4,8 +4,6 @@ from pathlib import Path
 
 import pytest
 
-from dis_cli import get_own_version
-
 
 def test_smoke(cli):
     assert cli(["dis.dis"]).exit_code == 0
@@ -197,9 +195,3 @@ def test_cannot_be_disassembled(cli, source_path, target):
 
     assert result.exit_code == 1
     assert "cannot be disassembled" in result.output
-
-
-def test_version(cli):
-    result = cli(["--version"])
-
-    assert get_own_version() in result.output

@@ -430,14 +430,5 @@ def make_bytecode_block(
     return grid
 
 
-def get_own_version() -> str:  # pragma: versioned
-    if sys.version_info < (3, 8):
-        import importlib_metadata
-    else:
-        import importlib.metadata as importlib_metadata
-
-    return importlib_metadata.version("dis_cli")
-
-
 if __name__ == "__main__":
     sys.exit(cli(prog_name="dis"))
