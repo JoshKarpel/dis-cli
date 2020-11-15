@@ -15,7 +15,7 @@ import traceback
 from dataclasses import dataclass
 from pathlib import Path
 from types import FunctionType, ModuleType
-from typing import Dict, Iterable, List, Optional, Tuple, Union
+from typing import Any, Dict, Iterable, List, Optional, Tuple, Union
 
 import click
 from rich.color import ANSI_COLOR_NAMES
@@ -103,7 +103,8 @@ def find_function(target: str) -> FunctionType:
 
     if len(parts) == 1:
         try:
-            raise target_was_a_module(silent_import(parts[0]))
+            module = silent_import(parts[0])
+            raise bad_target(target, module, module)
         except ModuleNotFoundError as e:
             # target was not *actually* a module
             raise click.ClickException(str(e))
@@ -114,25 +115,25 @@ def find_function(target: str) -> FunctionType:
         module_path, target_path = ".".join(parts[:split_point]), ".".join(parts[split_point:])
 
         try:
-            obj = silent_import(module_path)
+            module = obj = silent_import(module_path)
             break
         except ModuleNotFoundError:
             pass
 
-    for o in target_path.split("."):
+    for target_path_part in target_path.split("."):
         try:
-            obj = getattr(obj, o)
+            obj = getattr(obj, target_path_part)
         except AttributeError:
             raise click.ClickException(
-                f"No attribute named {o!r} found on {type(obj).__name__} {obj!r}."
+                f"No attribute named {target_path_part!r} found on {type(obj).__name__} {obj!r}."
             )
-
-    if inspect.ismodule(obj):
-        raise target_was_a_module(obj)
 
     # If the target is a class, display its __init__ method
     if inspect.isclass(obj):
         obj = obj.__init__  # type: ignore
+
+    if not inspect.isfunction(obj):
+        raise bad_target(target, obj, module)
 
     return obj
 
@@ -151,19 +152,24 @@ def silent_import(module_path: str) -> ModuleType:
             )
 
 
-def target_was_a_module(module: ModuleType) -> click.ClickException:
-    possibilities = list(find_functions(module))
+def bad_target(target: str, obj: Any, module: ModuleType) -> click.ClickException:
+    possible_targets = find_possible_targets(module)
 
-    if len(possibilities) == 0:
-        return click.ClickException(f"Cannot disassemble modules. Target a specific function.")
-    choice = random.choice(possibilities)
-    suggestion = click.style(f"{choice.__module__}.{choice.__qualname__}", bold=True)
-    return click.ClickException(
-        f"Cannot disassemble modules. Target a specific function, like {suggestion}"
-    )
+    msg = f"The target {target} = {obj} is a {type(obj).__name__}, which cannot be disassembled. Target a specific function"
+
+    if len(possible_targets) == 0:
+        return click.ClickException(f"{msg}.")
+    else:
+        choice = random.choice(possible_targets)
+        suggestion = click.style(f"{choice.__module__}.{choice.__qualname__}", bold=True)
+        return click.ClickException(f"{msg}, like {suggestion}")
 
 
-def find_functions(
+def find_possible_targets(obj: ModuleType) -> List[FunctionType]:
+    return list(_find_possible_targets(obj))
+
+
+def _find_possible_targets(
     module: ModuleType, top_module: Optional[ModuleType] = None
 ) -> Iterable[FunctionType]:
     for obj in vars(module).values():
@@ -175,7 +181,7 @@ def find_functions(
         if inspect.isfunction(obj):
             yield obj
         elif inspect.isclass(obj):
-            yield from find_functions(obj, top_module=top_module or module)
+            yield from _find_possible_targets(obj, top_module=top_module or module)
 
 
 def make_source_and_bytecode_display(function: FunctionType, theme: str) -> Display:
@@ -207,7 +213,7 @@ def make_source_and_bytecode_display(function: FunctionType, theme: str) -> Disp
                 renderables=(line_numbers_block, source_block, line_numbers_block, bytecode_block)
             ),
         ],
-        height=len(code_lines) + 1,  # the 1 is from the Rule
+        height=max(len(code_lines), len(instruction_rows)) + 1,  # the 1 is from the Rule
     )
 
 
