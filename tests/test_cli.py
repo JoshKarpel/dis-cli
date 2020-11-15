@@ -110,7 +110,9 @@ def test_targeting_a_class_targets_all_of_its_methods(cli, test_dir, filename):
     assert "wizbang" in result.output
 
 
-@pytest.mark.skipif(sys.version_info < (3, 7))
+@pytest.mark.skipif(
+    sys.version_info < (3, 7), reason="Non-native dataclasses don't behave the same"
+)
 def test_can_dis_dataclass(cli, test_dir, filename):
     """
     Dataclasses have generated methods with no matching source that we need a special case for.
