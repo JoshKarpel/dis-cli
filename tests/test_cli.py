@@ -94,7 +94,7 @@ def test_targeting_a_class_targets_all_of_its_methods(cli, test_dir, filename):
     class Foo:
         def __init__(self):
             print("foobar")
-        
+
         def method(self):
             print("wizbang")
     """
@@ -109,6 +109,30 @@ def test_targeting_a_class_targets_all_of_its_methods(cli, test_dir, filename):
     assert "wizbang" in result.output
 
 
+def test_can_dis_dataclass(cli, test_dir, filename):
+    """
+    Dataclasses have generated methods with no matching source that we need a special case for.
+    """
+    source_path = test_dir / f"{filename}.py"
+    source_path.write_text(
+        textwrap.dedent(
+            """\
+    from dataclasses import dataclass
+
+    @dataclass
+    class Foo:
+        attr: int
+    """
+        )
+    )
+    print(source_path.read_text())
+
+    result = cli([f"{source_path.stem}.Foo"])
+
+    assert result.exit_code == 0
+    assert "NO SOURCE CODE FOUND" in result.output
+
+
 def test_targeting_a_module_targets_its_members(cli, test_dir, filename):
     source_path = test_dir / f"{filename}.py"
     source_path.write_text(
@@ -116,10 +140,10 @@ def test_targeting_a_module_targets_its_members(cli, test_dir, filename):
             """\
     import itertools
     from os.path import join
-    
+
     def func():
         print("hello")
-    
+
     class Foo:
         def __init__(self):
             print("foobar")
