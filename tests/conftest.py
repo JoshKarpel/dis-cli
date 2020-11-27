@@ -5,9 +5,10 @@ import string
 import sys
 import traceback
 from pathlib import Path
-from typing import List
+from typing import Callable, Iterator, List
 
 import pytest
+from click import Command
 from click.testing import CliRunner, Result
 
 import dis_cli
@@ -30,10 +31,13 @@ def runner() -> CliRunner:
     return CliRunner()
 
 
-def invoke_with_debug(runner: CliRunner, cli, command: List[str], **kwargs) -> Result:
+T_CLI = Callable[[List[str]], Result]
+
+
+def invoke_with_debug(runner: CliRunner, cli: Command, command: List[str]) -> Result:
     command.append("--no-paging")
     print("command:", command)
-    result = runner.invoke(cli=cli, args=command, **kwargs)
+    result = runner.invoke(cli=cli, args=command)
 
     print("result:", result)
 
@@ -49,12 +53,12 @@ def invoke_with_debug(runner: CliRunner, cli, command: List[str], **kwargs) -> R
 
 
 @pytest.fixture(scope="session")
-def cli(runner):
+def cli(runner: CliRunner) -> T_CLI:
     return functools.partial(invoke_with_debug, runner, dis_cli.cli)
 
 
 @pytest.fixture
-def test_dir(tmp_path) -> Path:
+def test_dir(tmp_path: Path) -> Iterator[Path]:
     cwd = os.getcwd()
     os.chdir(tmp_path)
     try:

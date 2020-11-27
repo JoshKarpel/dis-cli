@@ -41,7 +41,7 @@ JUMP_COLORS = [
 RE_JUMP = re.compile(r"to (\d+)")
 
 INSTRUCTION_GRID_HEADERS = ["OFF", "OPERATION", "ARGS", ""]
-T_INSTRUCTION_ROW = Tuple[Text, ...]
+T_INSTRUCTION_ROW = Union[Tuple[Text, ...], str]
 
 T_CLASS_OR_MODULE = Union[type, ModuleType]
 T_FUNCTION_OR_CLASS_OR_MODULE = Union[FunctionType, T_CLASS_OR_MODULE]
@@ -119,7 +119,7 @@ class Target:
     imported_from: Optional[ModuleType] = None
 
     @cached_property
-    def module(self):
+    def module(self) -> Optional[ModuleType]:
         return self.imported_from or (self.obj if self.is_module else inspect.getmodule(self.obj))
 
     @cached_property
@@ -203,7 +203,7 @@ def silent_import(module_path: str) -> ModuleType:
             )
 
 
-def cannot_be_disassembled(target: Target):
+def cannot_be_disassembled(target: Target) -> None:
     msg = f"The target {target.path} = {target.obj} is a {type(target.obj).__name__}, which cannot be disassembled. Target a specific function"
 
     possible_targets = find_child_targets(target)
@@ -224,7 +224,7 @@ def find_child_targets(target: Target) -> List[Target]:
     return list(_find_child_targets(target, top_module=target.module))
 
 
-def _find_child_targets(target: Target, top_module: ModuleType) -> Iterable[Target]:
+def _find_child_targets(target: Target, top_module: Optional[ModuleType]) -> Iterable[Target]:
     try:
         children = vars(target.obj)
     except TypeError:  # vars() argument must have __dict__ attribute
@@ -282,7 +282,7 @@ def make_source_and_bytecode_display_for_function(function: FunctionType, theme:
     )
 
 
-def make_title(function, start_line: int) -> Text:
+def make_title(function: FunctionType, start_line: int) -> Text:
     source_file_path = Path(inspect.getmodule(function).__file__)
     try:
         source_file_path = source_file_path.relative_to(Path.cwd())
