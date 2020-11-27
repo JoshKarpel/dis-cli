@@ -195,3 +195,10 @@ def test_cannot_be_disassembled(cli, source_path, target):
 
     assert result.exit_code == 1
     assert "cannot be disassembled" in result.output
+
+
+def test_no_targets_prints_help(cli):
+    result = cli([])
+
+    assert result.exit_code == 0
+    assert "TARGET" in result.output
