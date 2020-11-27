@@ -4,6 +4,8 @@ from pathlib import Path
 
 import pytest
 
+from dis_cli import calculate_column_widths
+
 
 def test_smoke(cli):
     assert cli(["dis.dis"]).exit_code == 0
@@ -195,6 +197,28 @@ def test_cannot_be_disassembled(cli, source_path, target):
 
     assert result.exit_code == 1
     assert "cannot be disassembled" in result.output
+
+
+@pytest.mark.parametrize(
+    "terminal_width, line_num_width, ratio, expected",
+    [
+        (81, 1, 0.5, (38, 38)),
+        (80, 1, 0.5, (38, 37)),
+        (79, 1, 0.5, (37, 37)),
+        (79, 1, 1, (74, 0)),
+        (79, 1, 0, (0, 74)),
+        (79, 2, 0.5, (36, 36)),
+        (79, 3, 0.5, (35, 35)),
+        (79, 4, 0.5, (34, 34)),
+        (79, 4, 0.75, (51, 17)),
+        (80, 4, 0.75, (52, 17)),
+    ],
+)
+def test_column_width(terminal_width, line_num_width, ratio, expected):
+    assert (
+        calculate_column_widths(line_num_width, ratio=ratio, terminal_width=terminal_width)
+        == expected
+    )
 
 
 def test_no_targets_prints_help(cli):
