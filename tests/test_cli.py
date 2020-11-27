@@ -219,3 +219,10 @@ def test_column_width(terminal_width, line_num_width, ratio, expected):
         calculate_column_widths(line_num_width, ratio=ratio, terminal_width=terminal_width)
         == expected
     )
+
+
+def test_no_targets_prints_help(cli):
+    result = cli([])
+
+    assert result.exit_code == 0
+    assert "TARGET" in result.output
