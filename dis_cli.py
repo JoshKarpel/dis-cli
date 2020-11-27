@@ -63,6 +63,7 @@ DEFAULT_THEME = "monokai"
 @click.option(
     "-p/-P",
     "--paging/--no-paging",
+    "--pager/--no-pager",
     default=None,
     help="Enable/disable displaying output using the system pager. Default: enabled if the output is taller than your terminal window.",
 )
@@ -80,6 +81,11 @@ def cli(
 
     Any number of TARGETs may be passed; they will be displayed sequentially.
     """
+    if len(target) == 0:
+        ctx = click.get_current_context()
+        click.echo(ctx.get_help())
+        return
+
     # Make sure the cwd (implicit starting point for the import path) is actually on PYTHONPATH.
     # Since Python automatically adds the cwd on startup, this is only really necessary in the test suite,
     # but it's convenient to do it here for sanity.
