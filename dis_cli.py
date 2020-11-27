@@ -6,6 +6,7 @@ import functools
 import importlib
 import inspect
 import itertools
+import math
 import os
 import random
 import re
@@ -45,8 +46,6 @@ T_INSTRUCTION_ROW = Tuple[Text, ...]
 T_CLASS_OR_MODULE = Union[type, ModuleType]
 T_FUNCTION_OR_CLASS_OR_MODULE = Union[FunctionType, T_CLASS_OR_MODULE]
 
-NUMBER_COLUMN_WIDTH = 4
-
 DEFAULT_THEME = "monokai"
 
 
@@ -63,6 +62,7 @@ DEFAULT_THEME = "monokai"
 @click.option(
     "-p/-P",
     "--paging/--no-paging",
+    "--pager/--no-pager",
     default=None,
     help="Enable/disable displaying output using the system pager. Default: enabled if the output is taller than your terminal window.",
 )
@@ -80,6 +80,11 @@ def cli(
 
     Any number of TARGETs may be passed; they will be displayed sequentially.
     """
+    if len(target) == 0:
+        ctx = click.get_current_context()
+        click.echo(ctx.get_help())
+        return
+
     # Make sure the cwd (implicit starting point for the import path) is actually on PYTHONPATH.
     # Since Python automatically adds the cwd on startup, this is only really necessary in the test suite,
     # but it's convenient to do it here for sanity.
@@ -252,16 +257,18 @@ def make_source_and_bytecode_display_for_function(function: FunctionType, theme:
         instructions, jump_color_map, source_lines, start_line
     )
 
-    line_numbers = "\n".join(line_number_lines)
+    number_column_width = max(len(l) for l in line_number_lines)
+    left_col_width, right_col_width = calculate_column_widths(number_column_width)
 
-    half_width = calculate_half_width(line_numbers)
+    source_block = make_source_block(code_lines, block_width=left_col_width, theme=theme)
 
-    source_block = make_source_block(code_lines, block_width=half_width, theme=theme)
     bytecode_block = make_bytecode_block(
         instruction_rows,
-        block_width=half_width,
+        block_width=right_col_width,
         bgcolor=Syntax.get_theme(theme).get_background_style().bgcolor.name,
     )
+
+    line_numbers = "\n".join(s.rjust(number_column_width) for s in line_number_lines)
     line_numbers_block = make_nums_block(line_numbers)
 
     return Display(
@@ -307,7 +314,7 @@ def align_source_and_instructions(
             ]
             nums.extend(
                 (
-                    str(n).rjust(NUMBER_COLUMN_WIDTH) if not len(line.strip()) == 0 else ""
+                    str(n) if not len(line.strip()) == 0 else ""
                     for n, line in enumerate(new_code_lines, start=last_line_idx + 1)
                 )
             )
@@ -350,10 +357,15 @@ def find_jump_colors(instructions: List[dis.Instruction]) -> T_JUMP_COLOR_MAP:
     return jump_colors
 
 
-def calculate_half_width(line_numbers: str) -> int:
-    full_width = shutil.get_terminal_size().columns - (2 + (NUMBER_COLUMN_WIDTH * 2))
-    half_width = (full_width - (max(map(len, line_numbers)) * 2)) // 2
-    return half_width
+def calculate_column_widths(
+    line_number_width: int, ratio: float = 0.5, terminal_width: Optional[int] = None
+) -> Tuple[int, int]:
+    if terminal_width is None:
+        terminal_width = shutil.get_terminal_size().columns
+    usable_width = terminal_width - 3  # account for the border rich adds between columns
+    combined_column_width = usable_width - (line_number_width * 2)  # two line number columns
+    left_column_width = math.ceil(combined_column_width * ratio)
+    return left_column_width, combined_column_width - left_column_width
 
 
 def make_offset(instruction: dis.Instruction, jump_color_map: T_JUMP_COLOR_MAP) -> Text:
