@@ -41,7 +41,7 @@ JUMP_COLORS = [
 RE_JUMP = re.compile(r"to (\d+)")
 
 INSTRUCTION_GRID_HEADERS = ["OFF", "OPERATION", "ARGS", ""]
-T_INSTRUCTION_ROW = Tuple[Text, ...]
+T_INSTRUCTION_ROW = Union[Tuple[Text, ...], str]
 
 T_CLASS_OR_MODULE = Union[type, ModuleType]
 T_FUNCTION_OR_CLASS_OR_MODULE = Union[FunctionType, T_CLASS_OR_MODULE]

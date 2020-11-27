@@ -222,14 +222,14 @@ def test_cannot_be_disassembled(cli: T_CLI, source_path: Path, target_path: str)
         (80, 4, 0.75, (52, 17)),
     ],
 )
-def test_column_width(terminal_width, line_num_width, ratio, expected):
+def test_column_width(terminal_width, line_num_width, ratio, expected) -> None:
     assert (
         calculate_column_widths(line_num_width, ratio=ratio, terminal_width=terminal_width)
         == expected
     )
 
 
-def test_no_targets_prints_help(cli):
+def test_no_targets_prints_help(cli) -> None:
     result = cli([])
 
     assert result.exit_code == 0
