@@ -1,7 +1,8 @@
 from typing import Any
 
-import dis_cli
 import pytest
+
+import dis_cli
 
 
 class cls:
