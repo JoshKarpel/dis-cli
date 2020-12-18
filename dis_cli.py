@@ -34,7 +34,7 @@ if sys.version_info >= (3, 8):
 else:
     cached_property = lambda func: property(functools.lru_cache(maxsize=None)(func))
 
-T_JUMP_COLOR_MAP = Dict[int, str]
+T_JUMP_COLOR_MAP = Dict[Optional[int], str]
 JUMP_COLORS = [
     c for c in ANSI_COLOR_NAMES.keys() if not any(("grey" in c, "black" in c, "white" in c))
 ]
@@ -138,7 +138,11 @@ class Target:
     def is_function(self) -> bool:
         return inspect.isfunction(self.obj)
 
-    def make_display(self, theme: str) -> Display:
+    def make_display(self, theme: str = DEFAULT_THEME) -> Display:
+        if not isinstance(self.obj, FunctionType):
+            raise TypeError(
+                f"Target object {self.obj} must be a {FunctionType.__name__} to be displayed, but it was a {type(self.obj).__name__}"
+            )
         return make_source_and_bytecode_display_for_function(self.obj, theme)
 
     @classmethod
@@ -207,7 +211,7 @@ def cannot_be_disassembled(target: Target) -> None:
     msg = f"The target {target.path} = {target.obj} is a {type(target.obj).__name__}, which cannot be disassembled. Target a specific function"
 
     possible_targets = find_child_targets(target)
-    if len(possible_targets) == 0:
+    if len(possible_targets) == 0 and target.module is not None:
         possible_targets = find_child_targets(
             Target(obj=target.module, path=".".join(target.path.split(".")[:-1]))
         )
@@ -283,15 +287,19 @@ def make_source_and_bytecode_display_for_function(function: FunctionType, theme:
 
 
 def make_title(function: FunctionType, start_line: int) -> Text:
-    source_file_path = Path(inspect.getmodule(function).__file__)
-    try:
-        source_file_path = source_file_path.relative_to(Path.cwd())
-    except ValueError:  # path is not under the cwd
-        pass
+    module = inspect.getmodule(function)
+    if module is not None:
+        source_file_path = Path(module.__file__)
+        try:
+            source_file_path = source_file_path.relative_to(Path.cwd())
+        except ValueError:  # path is not under the cwd
+            pass
 
-    return Text.from_markup(
-        f"{type(function).__name__} [bold]{function.__module__}.{function.__qualname__}[/bold] from {source_file_path}:{start_line}"
-    )
+        return Text.from_markup(
+            f"{type(function).__name__} [bold]{function.__module__}.{function.__qualname__}[/bold] from {source_file_path}:{start_line}"
+        )
+    else:
+        return Text.from_markup(f"{type(function).__name__} [bold]{function.__qualname__}[/bold]")
 
 
 def align_source_and_instructions(
@@ -302,10 +310,10 @@ def align_source_and_instructions(
 ) -> Tuple[List[str], List[T_INSTRUCTION_ROW], List[str]]:
     raw_source_lines = [line.rstrip() for line in raw_source_lines]
 
-    source_lines = raw_source_lines[: instructions[0].starts_line - start_line]
+    source_lines = raw_source_lines[: (instructions[0].starts_line or 1) - start_line]
     instruction_rows = make_blank_instruction_rows(len(source_lines) - 1)
     nums = [str(start_line)] + ([""] * (len(source_lines) - 1))
-    last_line_idx = instructions[0].starts_line - 1
+    last_line_idx = (instructions[0].starts_line or 1) - 1
 
     for instr in instructions:
         if instr.starts_line is not None and instr.starts_line > last_line_idx:
@@ -351,10 +359,9 @@ def make_blank_instruction_rows(n: int) -> List[T_INSTRUCTION_ROW]:
 
 def find_jump_colors(instructions: List[dis.Instruction]) -> T_JUMP_COLOR_MAP:
     jump_targets = [i.offset for i in instructions if i.is_jump_target]
-    jump_colors = {
+    return {
         j: color for j, color in zip(jump_targets, random.sample(JUMP_COLORS, len(jump_targets)))
     }
-    return jump_colors
 
 
 def calculate_column_widths(
@@ -369,9 +376,7 @@ def calculate_column_widths(
 
 
 def make_offset(instruction: dis.Instruction, jump_color_map: T_JUMP_COLOR_MAP) -> Text:
-    return Text(
-        str(instruction.offset), style=Style(color=jump_color_map.get(instruction.offset, None))
-    )
+    return Text(str(instruction.offset), style=Style(color=jump_color_map.get(instruction.offset)))
 
 
 def make_opname(instruction: dis.Instruction) -> Text:
@@ -380,7 +385,7 @@ def make_opname(instruction: dis.Instruction) -> Text:
 
 def make_arg(instruction: dis.Instruction, jump_color_map: T_JUMP_COLOR_MAP) -> Text:
     return Text(
-        str(instruction.arg) if instruction.arg is not None else "",
+        str(instruction.arg or ""),
         style=Style(color=jump_color_map.get(instruction.arg)),
     )
 
