@@ -35,3 +35,5 @@ jobs:
         env_vars: PLATFORM,PYTHON_VERSION
         fail_ci_if_error: true
         verbose: true
+    - name: Run mypy
+      run: mypy .

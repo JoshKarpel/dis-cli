@@ -17,15 +17,15 @@ import traceback
 from dataclasses import dataclass
 from pathlib import Path
 from types import FunctionType, ModuleType
-from typing import Dict, Iterable, Iterator, List, Optional, Tuple, Union
+from typing import Dict, Iterable, Iterator, List, Optional, Tuple, Union, cast
 
 import click
-from rich.color import ANSI_COLOR_NAMES
+from rich.color import ANSI_COLOR_NAMES, Color
 from rich.columns import Columns
 from rich.console import Console
 from rich.rule import Rule
 from rich.style import Style
-from rich.syntax import Syntax
+from rich.syntax import Syntax, SyntaxTheme
 from rich.table import Table
 from rich.text import Text
 
@@ -120,7 +120,9 @@ class Target:
 
     @cached_property
     def module(self) -> Optional[ModuleType]:
-        return self.imported_from or (self.obj if self.is_module else inspect.getmodule(self.obj))
+        return self.imported_from or (
+            cast(ModuleType, self.obj) if self.is_module else inspect.getmodule(self.obj)
+        )
 
     @cached_property
     def is_module(self) -> bool:
@@ -269,7 +271,7 @@ def make_source_and_bytecode_display_for_function(function: FunctionType, theme:
     bytecode_block = make_bytecode_block(
         instruction_rows,
         block_width=right_col_width,
-        bgcolor=Syntax.get_theme(theme).get_background_style().bgcolor.name,
+        bgcolor=Syntax.get_theme(theme).get_background_style().bgcolor,
     )
 
     line_numbers = "\n".join(s.rjust(number_column_width) for s in line_number_lines)
@@ -394,7 +396,7 @@ def make_arg_repr(instruction: dis.Instruction, jump_color_map: T_JUMP_COLOR_MAP
     match = RE_JUMP.match(instruction.argrepr)
     return Text(
         f"{instruction.argrepr}",
-        style=Style(color=jump_color_map.get(int(match.group(1)))) if match else None,
+        style=Style(color=jump_color_map.get(int(match.group(1)))) if match else Style(),
         no_wrap=True,
     )
 
@@ -406,7 +408,7 @@ def make_nums_block(nums: str) -> Text:
 def make_source_block(
     code_lines: List[str],
     block_width: int,
-    theme: Optional[str] = None,
+    theme: Union[str, SyntaxTheme] = DEFAULT_THEME,
 ) -> Syntax:
     code_lines = textwrap.dedent("\n".join(code_lines)).splitlines()
     code_lines = [
@@ -422,7 +424,9 @@ def make_source_block(
 
 
 def make_bytecode_block(
-    instruction_rows: List[T_INSTRUCTION_ROW], block_width: int, bgcolor: str
+    instruction_rows: List[T_INSTRUCTION_ROW],
+    block_width: int,
+    bgcolor: Optional[Union[str, Color]],
 ) -> Table:
     grid = Table(
         box=None,
