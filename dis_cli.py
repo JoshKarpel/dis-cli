@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 
-import contextlib
 import dis
 import functools
 import importlib
@@ -14,6 +13,7 @@ import shutil
 import sys
 import textwrap
 import traceback
+from contextlib import contextmanager, redirect_stderr, redirect_stdout
 from dataclasses import dataclass
 from pathlib import Path
 from types import FunctionType, ModuleType
@@ -33,6 +33,15 @@ if sys.version_info >= (3, 8):
     from functools import cached_property
 else:
     cached_property = lambda func: property(functools.lru_cache(maxsize=None)(func))
+
+if sys.version_info >= (3, 7):
+    from contextlib import nullcontext
+else:
+
+    @contextmanager
+    def nullcontext():
+        yield
+
 
 T_JUMP_COLOR_MAP = Dict[Optional[int], str]
 JUMP_COLORS = [
@@ -108,7 +117,7 @@ def should_page(paging: Optional[bool], total_height: int) -> bool:
 
 
 def pager(paging: bool, console: Console) -> Union[PagerContext, ContextManager[None]]:
-    return console.pager(styles=True) if paging else contextlib.nullcontext()
+    return console.pager(styles=True) if paging else nullcontext()
 
 
 @dataclass(frozen=True)
@@ -201,7 +210,7 @@ def make_source_and_bytecode_displays_for_targets(
 
 
 def silent_import(module_path: str) -> ModuleType:
-    with open(os.devnull, "w") as f, contextlib.redirect_stdout(f), contextlib.redirect_stderr(f):
+    with open(os.devnull, "w") as f, redirect_stdout(f), redirect_stderr(f):
         try:
             return importlib.import_module(module_path)
         except ImportError:
