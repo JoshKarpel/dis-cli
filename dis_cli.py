@@ -17,12 +17,12 @@ import traceback
 from dataclasses import dataclass
 from pathlib import Path
 from types import FunctionType, ModuleType
-from typing import Dict, Iterable, Iterator, List, Optional, Tuple, Union, cast
+from typing import ContextManager, Dict, Iterable, Iterator, List, Optional, Tuple, Union, cast
 
 import click
 from rich.color import ANSI_COLOR_NAMES, Color
 from rich.columns import Columns
-from rich.console import Console
+from rich.console import Console, PagerContext
 from rich.rule import Rule
 from rich.style import Style
 from rich.syntax import Syntax, SyntaxTheme
@@ -96,14 +96,19 @@ def cli(
     parts = itertools.chain.from_iterable(display.parts for display in displays)
     total_height = sum(display.height for display in displays)
 
-    if paging is None:  # pragma: no cover
-        paging = total_height > (shutil.get_terminal_size((80, 20)).lines - 5)
-
-    if paging:  # pragma: no cover
-        with console.pager(styles=True):
-            console.print(*parts)
-    else:
+    with pager(paging=should_page(paging, total_height), console=console):
         console.print(*parts)
+
+
+def should_page(paging: Optional[bool], total_height: int) -> bool:
+    if paging is None:
+        return total_height > (shutil.get_terminal_size((80, 20)).lines - 5)
+    else:
+        return paging
+
+
+def pager(paging: bool, console: Console) -> Union[PagerContext, ContextManager[None]]:
+    return console.pager(styles=True) if paging else contextlib.nullcontext()
 
 
 @dataclass(frozen=True)
