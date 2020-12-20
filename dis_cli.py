@@ -39,7 +39,7 @@ if sys.version_info >= (3, 7):
 else:
 
     @contextmanager
-    def nullcontext():
+    def nullcontext() -> Iterator[None]:
         yield
 
 
