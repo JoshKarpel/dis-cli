@@ -41,9 +41,10 @@ def invoke_with_debug(runner: CliRunner, cli: Command, command: List[str]) -> Re
 
     print("result:", result)
 
-    if result.exception:
+    if result.exc_info is not None:
         print("traceback:\n")
-        traceback.print_exception(*result.exc_info, file=sys.stdout)
+        exc_type, exc_val, exc_tb = result.exc_info
+        traceback.print_exception(exc_val, exc_val, exc_tb, file=sys.stdout)
         print()
 
     print("exit code:", result.exit_code)
