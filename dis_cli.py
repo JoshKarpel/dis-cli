@@ -304,7 +304,7 @@ def make_source_and_bytecode_display_for_function(function: FunctionType, theme:
 
 def make_title(function: FunctionType, start_line: int) -> Text:
     module = inspect.getmodule(function)
-    if module is not None:
+    if module is not None and module.__file__ is not None:
         source_file_path = Path(module.__file__)
         try:
             source_file_path = source_file_path.relative_to(Path.cwd())
@@ -430,7 +430,7 @@ def make_source_block(
     ]
     return Syntax(
         "\n".join(code_lines),
-        lexer_name="python",
+        lexer="python",
         theme=theme,
         line_numbers=False,
         code_width=block_width,
