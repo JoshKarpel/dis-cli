@@ -430,7 +430,7 @@ def make_source_block(
     ]
     return Syntax(
         "\n".join(code_lines),
-        lexer_name="python",
+        lexer="python",
         theme=theme,
         line_numbers=False,
         code_width=block_width,
