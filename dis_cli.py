@@ -13,8 +13,9 @@ import shutil
 import sys
 import textwrap
 import traceback
-from contextlib import contextmanager, redirect_stderr, redirect_stdout
+from contextlib import contextmanager, nullcontext, redirect_stderr, redirect_stdout
 from dataclasses import dataclass
+from functools import cached_property
 from pathlib import Path
 from types import FunctionType, ModuleType
 from typing import ContextManager, Dict, Iterable, Iterator, List, Optional, Tuple, Union, cast
@@ -28,20 +29,6 @@ from rich.style import Style
 from rich.syntax import Syntax, SyntaxTheme
 from rich.table import Table
 from rich.text import Text
-
-if sys.version_info >= (3, 8):
-    from functools import cached_property
-else:
-    cached_property = lambda func: property(functools.lru_cache(maxsize=None)(func))
-
-if sys.version_info >= (3, 7):
-    from contextlib import nullcontext
-else:
-
-    @contextmanager
-    def nullcontext() -> Iterator[None]:
-        yield
-
 
 T_JUMP_COLOR_MAP = Dict[Optional[int], str]
 JUMP_COLORS = [
@@ -295,7 +282,8 @@ def make_source_and_bytecode_display_for_function(function: FunctionType, theme:
         parts=[
             Rule(title=make_title(function, start_line), style=random.choice(JUMP_COLORS)),
             Columns(
-                renderables=(line_numbers_block, source_block, line_numbers_block, bytecode_block)
+                renderables=(line_numbers_block, source_block, line_numbers_block, bytecode_block),
+                padding=(0, 1),
             ),
         ],
         height=max(len(code_lines), len(instruction_rows)) + 1,  # the 1 is from the Rule
@@ -385,7 +373,7 @@ def calculate_column_widths(
 ) -> Tuple[int, int]:
     if terminal_width is None:
         terminal_width = shutil.get_terminal_size().columns
-    usable_width = terminal_width - 3  # account for the border rich adds between columns
+    usable_width = terminal_width - 4  # account for the border rich adds between columns
     combined_column_width = usable_width - (line_number_width * 2)  # two line number columns
     left_column_width = math.ceil(combined_column_width * ratio)
     return left_column_width, combined_column_width - left_column_width

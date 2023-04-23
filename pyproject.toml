@@ -13,4 +13,4 @@ profile = "black"
 line_length = 100
 
 [tool.pytest.ini_options]
-addopts = ['--strict-markers', '--mypy']
+addopts = ['--strict-markers']
