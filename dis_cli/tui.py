@@ -9,7 +9,7 @@ from rich.syntax import Syntax
 from rich.table import Table
 from rich.text import Text
 from textual.app import App, ComposeResult
-from textual.containers import Horizontal, Vertical, VerticalScroll
+from textual.containers import Horizontal, HorizontalScroll, Vertical
 from textual.events import Mount
 from textual.reactive import reactive
 from textual.widget import Widget
@@ -81,25 +81,28 @@ class CodeWidget(Widget):
     def compose(self) -> ComposeResult:
         yield Static(id="code-header")
         with Vertical():
-            yield Static(id="code-display", expand=True)
-            with VerticalScroll():
-                with Horizontal():
-                    yield Static(id="left")
-                    yield Static(id="right")
+            with HorizontalScroll(id="code-scroll"):
+                yield Static(id="left-nums", classes="nums")
+                yield Static(id="left", classes="source")
+                yield Static(id="right-nums", classes="nums")
+                yield Static(id="right", classes="bytecode")
 
     def watch_node(self, node: Node | None) -> None:
         if isinstance(node, FunctionNode):
-            self.query_one("#code-display", Static).update(Rule(f"{node.qualname}"))
-
-            source, bytecode = make_source_and_bytecode_display_for_function(
+            source, bytecode, nums = make_source_and_bytecode_display_for_function(
                 node.obj, theme="monokai"
             )
 
+            self.query_one("#code-header", Static).update(Rule(f"{node.qualname}"))
+            self.query_one("#left-nums", Static).update(nums)
             self.query_one("#left", Static).update(source)
+            self.query_one("#right-nums", Static).update(nums)
             self.query_one("#right", Static).update(bytecode)
         else:
-            self.query_one("#code-display", Static).update(Text())
+            self.query_one("#code-header", Static).update(Text())
+            self.query_one("#left-nums", Static).update(Text())
             self.query_one("#left", Static).update(Text())
+            self.query_one("#right-nums", Static).update(Text())
             self.query_one("#right", Static).update(Text())
 
 
@@ -121,9 +124,10 @@ def make_source_and_bytecode_display_for_function(function: FunctionType, theme:
 
     bytecode_block = make_bytecode_block(instruction_rows)
 
-    "\n".join(s.rjust(number_column_width) for s in line_number_lines)
+    line_numbers = "\n".join(s.rjust(number_column_width) for s in line_number_lines)
+    line_numbers_block = make_nums_block(line_numbers)
 
-    return source_block, bytecode_block
+    return source_block, bytecode_block, line_numbers_block
 
 
 def align_source_and_instructions(
@@ -229,3 +233,7 @@ def make_bytecode_block(
         grid.add_row(*row, style=Style(color="bright_white"))
 
     return grid
+
+
+def make_nums_block(nums: str) -> Text:
+    return Text(nums, justify="right")
