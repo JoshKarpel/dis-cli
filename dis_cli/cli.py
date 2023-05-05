@@ -8,6 +8,7 @@ from typer import Typer
 
 from dis_cli.constants import PACKAGE_NAME, __version__
 from dis_cli.tree import ModuleNode
+from dis_cli.tui import DisApp
 
 ru.STYLE_HELPTEXT = ""
 
@@ -38,4 +39,13 @@ def version() -> None:
 def tree(module: str) -> None:
     imported = import_module(module)  # TODO: silent import
     root = ModuleNode.build(imported)
-    console.print(root.tree())
+    console.print(root.rich_tree())
+
+
+@cli.command()
+def browse(module: str) -> None:
+    imported = import_module(module)  # TODO: silent import
+    root = ModuleNode.build(imported)
+
+    tui = DisApp(root)
+    tui.run()

@@ -7,18 +7,20 @@ from inspect import isclass, isfunction, ismodule
 from itertools import chain
 from types import FunctionType, ModuleType
 
-from rich.console import RenderableType
 from rich.syntax import Syntax
-from rich.tree import Tree
+from rich.text import Text
+from rich.tree import Tree as RichTree
+from textual.widgets import Tree as TextualTree
+from textual.widgets._tree import TreeNode
 from typing_extensions import Self
 
 
 @dataclass(frozen=True)
 class ModuleNode:
     obj: ModuleType
-    modules: tuple[ModuleNode]
-    classes: tuple[ClassNode]
-    functions: tuple[FunctionNode]
+    modules: tuple[ModuleNode, ...]
+    classes: tuple[ClassNode, ...]
+    functions: tuple[FunctionNode, ...]
 
     @classmethod
     def build(cls, obj: ModuleType):
@@ -45,14 +47,24 @@ class ModuleNode:
         yield from chain(self.modules, self.classes, self.functions)
 
     @cached_property
-    def display_name(self) -> RenderableType:
-        return Syntax(code=f"import {self.obj.__name__}", lexer="python")
+    def display_name(self) -> Text:
+        s = Syntax(code="", lexer="python").highlight(f"import {self.obj.__name__}")
+        s.rstrip()
+        return s
 
-    def tree(self, tree: Tree | None = None) -> Tree:
-        branch = tree.add(self.display_name) if tree else Tree(self.display_name)
+    def rich_tree(self, tree: RichTree | None = None) -> RichTree:
+        branch = tree.add(self.display_name) if tree else RichTree(self.display_name)
 
         for child in self.children:
-            child.tree(branch)
+            child.rich_tree(branch)
+
+        return branch
+
+    def textual_tree(self, tree: TreeNode | None = None) -> TreeNode:
+        branch = tree.add(self.display_name) if tree else TextualTree(self.display_name).root
+
+        for child in self.children:
+            child.textual_tree(branch)
 
         return branch
 
@@ -60,26 +72,41 @@ class ModuleNode:
 @dataclass(frozen=True)
 class ClassNode:
     obj: type
-    methods: tuple[FunctionType]
+    methods: tuple[FunctionNode, ...]
     # TODO: inner classes?
 
     @classmethod
     def build(cls, obj: type) -> Self:
-        return ClassNode(obj=obj, methods=tuple())
+        methods = []
+        for child in vars(obj).values():
+            if isfunction(child):
+                methods.append(FunctionNode.build(child))
+
+        return ClassNode(obj=obj, methods=tuple(methods))
 
     @property
     def children(self) -> Iterator[ModuleNode | ClassNode | FunctionNode]:
         yield from chain(self.methods)
 
     @cached_property
-    def display_name(self) -> RenderableType:
-        return Syntax(code=f"class {self.obj.__name__}", lexer="python")
+    def display_name(self) -> Text:
+        s = Syntax(code="", lexer="python").highlight(f"class {self.obj.__name__}")
+        s.rstrip()
+        return s
 
-    def tree(self, tree: Tree | None = None) -> Tree:
-        branch = tree.add(self.display_name) if tree else Tree(self.display_name)
+    def rich_tree(self, tree: RichTree | None = None) -> RichTree:
+        branch = tree.add(self.display_name) if tree else RichTree(self.display_name)
 
         for child in self.children:
-            child.tree(branch)
+            child.rich_tree(branch)
+
+        return branch
+
+    def textual_tree(self, tree: TreeNode | None = None) -> TreeNode:
+        branch = tree.add(self.display_name) if tree else TextualTree(self.display_name).root
+
+        for child in self.children:
+            child.textual_tree(branch)
 
         return branch
 
@@ -94,10 +121,17 @@ class FunctionNode:
         return FunctionNode(obj=obj)
 
     @cached_property
-    def display_name(self) -> RenderableType:
-        return Syntax(code=f"def {self.obj.__name__}", lexer="python")
+    def display_name(self) -> Text:
+        s = Syntax(code="", lexer="python").highlight(f"def {self.obj.__name__}")
+        s.rstrip()
+        return s
 
-    def tree(self, tree: Tree | None = None) -> Tree:
-        branch = tree.add(self.display_name) if tree else Tree(self.display_name)
+    def rich_tree(self, tree: RichTree | None = None) -> RichTree:
+        branch = tree.add(self.display_name) if tree else RichTree(self.display_name)
+
+        return branch
+
+    def textual_tree(self, tree: TreeNode | None = None) -> TreeNode:
+        branch = tree.add_leaf(self.display_name) if tree else TextualTree(self.display_name).root
 
         return branch
