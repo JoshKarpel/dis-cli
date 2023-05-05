@@ -1,0 +1,34 @@
+Screen {
+    background: $surface-darken-1;
+}
+
+#tree-view {
+    display: none;
+    scrollbar-gutter: stable;
+    overflow: auto;
+    width: auto;
+    height: 100%;
+    dock: left;
+}
+
+DisApp.-show-tree #tree-view {
+    display: block;
+    max-width: 50%;
+
+}
+
+
+#code-view {
+    overflow: auto scroll;
+    min-width: 100%;
+}
+#code {
+    width: auto;
+}
+
+#left {
+    width: 1fr
+}
+#right {
+    width: 1fr
+}

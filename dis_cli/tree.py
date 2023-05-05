@@ -47,8 +47,16 @@ class ModuleNode:
         yield from chain(self.modules, self.classes, self.functions)
 
     @cached_property
+    def name(self) -> str:
+        return self.obj.__name__
+
+    @cached_property
+    def qualname(self) -> str:
+        return self.obj.__name__
+
+    @cached_property
     def display_name(self) -> Text:
-        s = Syntax(code="", lexer="python").highlight(f"import {self.obj.__name__}")
+        s = Syntax(code="", lexer="python").highlight(f"import {self.name}")
         s.rstrip()
         return s
 
@@ -61,7 +69,11 @@ class ModuleNode:
         return branch
 
     def textual_tree(self, tree: TreeNode | None = None) -> TreeNode:
-        branch = tree.add(self.display_name) if tree else TextualTree(self.display_name).root
+        branch = (
+            tree.add(self.display_name, data=self)
+            if tree
+            else TextualTree(self.display_name, data=self).root
+        )
 
         for child in self.children:
             child.textual_tree(branch)
@@ -89,8 +101,16 @@ class ClassNode:
         yield from chain(self.methods)
 
     @cached_property
+    def name(self) -> str:
+        return self.obj.__name__
+
+    @cached_property
+    def qualname(self) -> str:
+        return self.obj.__qualname__
+
+    @cached_property
     def display_name(self) -> Text:
-        s = Syntax(code="", lexer="python").highlight(f"class {self.obj.__name__}")
+        s = Syntax(code="", lexer="python").highlight(f"class {self.name}")
         s.rstrip()
         return s
 
@@ -103,7 +123,11 @@ class ClassNode:
         return branch
 
     def textual_tree(self, tree: TreeNode | None = None) -> TreeNode:
-        branch = tree.add(self.display_name) if tree else TextualTree(self.display_name).root
+        branch = (
+            tree.add(self.display_name, data=self)
+            if tree
+            else TextualTree(self.display_name, data=self).root
+        )
 
         for child in self.children:
             child.textual_tree(branch)
@@ -121,8 +145,16 @@ class FunctionNode:
         return FunctionNode(obj=obj)
 
     @cached_property
+    def name(self) -> str:
+        return self.obj.__name__
+
+    @cached_property
+    def qualname(self) -> str:
+        return self.obj.__qualname__
+
+    @cached_property
     def display_name(self) -> Text:
-        s = Syntax(code="", lexer="python").highlight(f"def {self.obj.__name__}")
+        s = Syntax(code="", lexer="python").highlight(f"def {self.name}")
         s.rstrip()
         return s
 
@@ -132,6 +164,13 @@ class FunctionNode:
         return branch
 
     def textual_tree(self, tree: TreeNode | None = None) -> TreeNode:
-        branch = tree.add_leaf(self.display_name) if tree else TextualTree(self.display_name).root
+        branch = (
+            tree.add_leaf(self.display_name, data=self)
+            if tree
+            else TextualTree(self.display_name, data=self).root
+        )
 
         return branch
+
+
+Node = ModuleNode | ClassNode | FunctionNode
