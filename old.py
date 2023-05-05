@@ -32,7 +32,10 @@ from rich.text import Text
 if sys.version_info >= (3, 8):
     from functools import cached_property
 else:
-    cached_property = lambda func: property(functools.lru_cache(maxsize=None)(func))
+
+    def cached_property(func):
+        return property(functools.lru_cache(maxsize=None)(func))
+
 
 if sys.version_info >= (3, 7):
     from contextlib import nullcontext
@@ -97,7 +100,7 @@ def cli(
     # Make sure the cwd (implicit starting point for the import path) is actually on PYTHONPATH.
     # Since Python automatically adds the cwd on startup, this is only really necessary in the test suite,
     # but it's convenient to do it here for sanity.
-    sys.path.append(os.getcwd())
+    sys.path.append(str(Path.cwd()))
 
     console = Console(highlight=True, tab_size=4)
 
@@ -210,7 +213,7 @@ def make_source_and_bytecode_displays_for_targets(
 
 
 def silent_import(module_path: str) -> ModuleType:
-    with open(os.devnull, "w") as f, redirect_stdout(f), redirect_stderr(f):
+    with Path(os.devnull).open("w") as f, redirect_stdout(f), redirect_stderr(f):
         try:
             return importlib.import_module(module_path)
         except ImportError:
@@ -277,7 +280,7 @@ def make_source_and_bytecode_display_for_function(function: FunctionType, theme:
         instructions, jump_color_map, source_lines, start_line
     )
 
-    number_column_width = max(len(l) for l in line_number_lines)
+    number_column_width = max(len(line) for line in line_number_lines)
     left_col_width, right_col_width = calculate_column_widths(number_column_width)
 
     source_block = make_source_block(code_lines, block_width=left_col_width, theme=theme)

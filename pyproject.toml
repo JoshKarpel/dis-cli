@@ -1,16 +1,122 @@
 [build-system]
-requires = ["setuptools >= 40.6.0", "wheel"]
-build-backend = "setuptools.build_meta"
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.poetry]
+name = "dis_cli"
+version = "0.4.0"
+description = "A CLI and TUI tool for viewing Python bytecode in your terminal."
+readme="README.md"
+homepage="https://github.com/JoshKarpel/dis_cli"
+repository="https://github.com/JoshKarpel/dis_cli"
+documentation="https://github.com/JoshKarpel/dis_cli"
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Education",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: Microsoft :: Windows",
+    "Operating System :: MacOS",
+    "Operating System :: Unix",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Topic :: Software Development",
+    "Topic :: Software Development :: Disassemblers",
+    "Topic :: Utilities",
+    "Typing :: Typed",
+]
+keywords = [
+    "disassembler",
+    "bytecode",
+    "tui",
+    "terminal",
+]
+authors = ["JoshKarpel <josh.karpel@gmail.com>"]
+license = "MIT"
+include = ["py.typed", "dis_cli.css"]
+
+[tool.poetry.dependencies]
+python = ">=3.10,<4"
+rich = ">=13.2"
+typer = ">=0.6"
+textual = ">=0.23.0"
+typing-extensions = "^4.5.0"
+
+[tool.poetry.group.dev.dependencies]
+pre-commit = ">=3"
+pytest = ">=7"
+pytest-cov = ">=3"
+pytest-xdist = ">=3"
+pytest-asyncio = ">=0.20"
+pytest-mock = ">=3"
+hypothesis = ">=6"
+mypy = ">=1"
+textual = {extras = ["dev"], version = ">=0.23.0"}
+
+[tool.poetry.scripts]
+dis = 'dis_cli.cli:cli'
 
 [tool.black]
 line-length = 100
-target-version = ["py36", "py37", "py38"]
 include = "\\.pyi?$"
 
 [tool.isort]
-known_third_party = ["click", "pytest", "rich", "setuptools"]
 profile = "black"
 line_length = 100
 
+[tool.pycln]
+all = true
+
 [tool.pytest.ini_options]
-addopts = ['--strict-markers', '--mypy']
+addopts = ["--strict-markers"]
+testpaths = ["tests", "dis_cli"]
+
+markers = ["slow"]
+
+asyncio_mode = "auto"
+
+[tool.mypy]
+pretty = false
+show_error_codes = true
+
+files = ["."]
+
+check_untyped_defs = true
+disallow_incomplete_defs = true
+disallow_untyped_defs = true
+no_implicit_optional = true
+disallow_any_generics = true
+
+warn_unused_configs = true
+warn_unused_ignores = true
+warn_no_return = true
+warn_unreachable = true
+warn_redundant_casts = true
+
+ignore_missing_imports = true
+
+[tool.ruff]
+line-length = 100
+
+select = [
+    "I",   # https://beta.ruff.rs/docs/rules/#isort-i
+    "F",   # https://beta.ruff.rs/docs/rules/#pyflakes-f
+    "E",   # https://beta.ruff.rs/docs/rules/#error-e
+    "W",   # https://beta.ruff.rs/docs/rules/#warning-w
+    "T20", # https://beta.ruff.rs/docs/rules/#flake8-print-t20
+    "PIE", # https://beta.ruff.rs/docs/rules/#flake8-pie-pie
+    "PLC", # https://beta.ruff.rs/docs/rules/#convention-plc
+    "PLE", # https://beta.ruff.rs/docs/rules/#error-ple
+    "PLW", # https://beta.ruff.rs/docs/rules/#warning-plw
+    "PTH", # https://beta.ruff.rs/docs/rules/#flake8-use-pathlib-pth
+    "PGH", # https://beta.ruff.rs/docs/rules/#pygrep-hooks-pgh
+    "RUF", # https://beta.ruff.rs/docs/rules/#ruff-specific-rules-ruf
+]
+
+ignore = [
+    "E501",  # line length exceeds limit
+    "T201",  # print
+]
