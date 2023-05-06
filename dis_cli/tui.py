@@ -3,7 +3,7 @@ from inspect import getsourcelines
 from textwrap import dedent
 from types import FunctionType
 
-from rich.rule import Rule
+from rich.align import Align
 from rich.style import Style
 from rich.syntax import Syntax
 from rich.table import Table
@@ -79,8 +79,8 @@ class CodeWidget(Widget):
     node: Node | None = reactive(None)
 
     def compose(self) -> ComposeResult:
-        yield Static(id="code-header")
         with Vertical():
+            yield Static(id="code-header")
             with HorizontalScroll(id="code-scroll"):
                 yield Static(id="left-nums", classes="nums")
                 yield Static(id="left", classes="source")
@@ -93,7 +93,9 @@ class CodeWidget(Widget):
                 node.obj, theme="monokai"
             )
 
-            self.query_one("#code-header", Static).update(Rule(f"{node.qualname}  {node.loc}"))
+            self.query_one("#code-header", Static).update(
+                Align.center(Text(f"{node.qualname}  {node.loc}"))
+            )
             self.query_one("#left-nums", Static).update(nums)
             self.query_one("#left", Static).update(source)
             self.query_one("#right-nums", Static).update(nums)
@@ -216,7 +218,7 @@ def make_bytecode_block(
 ) -> Table:
     grid = Table(
         box=None,
-        padding=0,
+        padding=(0, 0, 1, 1),
         collapse_padding=True,
         show_header=True,
         show_footer=False,

@@ -28,7 +28,7 @@ class ModuleNode:
         classes = []
         functions = []
         for child in vars(obj).values():
-            if ismodule(child):
+            if ismodule(child) and obj.__name__ in child.__name__.split("."):
                 modules.append(ModuleNode.build(child))
             elif isclass(child):
                 classes.append(ClassNode.build(child))

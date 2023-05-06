@@ -8,6 +8,7 @@ Screen {
     overflow: auto;
     width: auto;
     height: 100%;
+    border-right: solid;
     dock: left;
 }
 
@@ -25,6 +26,10 @@ DisApp.-show-tree #tree-view {
     width: auto;
 }
 
+#code-header {
+    border-bottom: solid;
+}
+
 #left-nums {
     width: auto;
     padding-right: 1;
@@ -36,7 +41,11 @@ DisApp.-show-tree #tree-view {
 }
 #left {
     width: 1fr;
+    overflow: auto auto;
 }
 #right {
     width: auto;
+    max-width: 50%;
+    padding-right: 1;
+    overflow: auto auto;
 }
