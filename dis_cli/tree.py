@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections.abc import Iterator
 from dataclasses import dataclass
 from functools import cached_property
-from inspect import isclass, isfunction, ismodule
+from inspect import getsourcefile, getsourcelines, isclass, isfunction, ismodule
 from itertools import chain
 from types import FunctionType, ModuleType
 
@@ -84,21 +84,24 @@ class ModuleNode:
 @dataclass(frozen=True)
 class ClassNode:
     obj: type
+    classes: tuple[ClassNode, ...]
     methods: tuple[FunctionNode, ...]
-    # TODO: inner classes?
 
     @classmethod
     def build(cls, obj: type) -> Self:
+        classes = []
         methods = []
         for child in vars(obj).values():
-            if isfunction(child):
+            if isclass(child):
+                classes.append(ClassNode.build(child))
+            elif isfunction(child):
                 methods.append(FunctionNode.build(child))
 
-        return ClassNode(obj=obj, methods=tuple(methods))
+        return ClassNode(obj=obj, classes=tuple(classes), methods=tuple(methods))
 
     @property
     def children(self) -> Iterator[ModuleNode | ClassNode | FunctionNode]:
-        yield from chain(self.methods)
+        yield from chain(self.classes, self.methods)
 
     @cached_property
     def name(self) -> str:
@@ -138,7 +141,6 @@ class ClassNode:
 @dataclass(frozen=True)
 class FunctionNode:
     obj: FunctionType
-    # TODO: inner functions?
 
     @classmethod
     def build(cls, obj: FunctionType) -> Self:
@@ -150,7 +152,12 @@ class FunctionNode:
 
     @cached_property
     def qualname(self) -> str:
-        return self.obj.__qualname__
+        return f"{self.obj.__module__}.{self.obj.__qualname__}"
+
+    @cached_property
+    def loc(self) -> str:
+        _, start_line = getsourcelines(self.obj)
+        return f"{getsourcefile(self.obj)}:{start_line}"
 
     @cached_property
     def display_name(self) -> Text:

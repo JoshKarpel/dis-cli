@@ -93,7 +93,7 @@ class CodeWidget(Widget):
                 node.obj, theme="monokai"
             )
 
-            self.query_one("#code-header", Static).update(Rule(f"{node.qualname}"))
+            self.query_one("#code-header", Static).update(Rule(f"{node.qualname}  {node.loc}"))
             self.query_one("#left-nums", Static).update(nums)
             self.query_one("#left", Static).update(source)
             self.query_one("#right-nums", Static).update(nums)
